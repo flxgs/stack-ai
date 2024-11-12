@@ -16,19 +16,24 @@ const BASE_URL = "https://api.stack-ai.com";
  */
 export async function GET(request: NextRequest) {
   try {
-    const headersList = headers();
+    // Get headers asynchronously
+    const headersList = await headers();
     const authHeader = headersList.get("authorization");
-    const { searchParams } = new URL(request.url);
 
-    // Extract required parameters
+    const { searchParams } = new URL(request.url);
     const connectionId = searchParams.get("connectionId");
     const resourceId = searchParams.get("resourceId");
 
-    // Build query string for nested folder navigation
+    if (!connectionId) {
+      return NextResponse.json(
+        { error: "Connection ID is required" },
+        { status: 400 }
+      );
+    }
+
     const queryString = resourceId ? `?resource_id=${resourceId}` : "";
     const url = `${BASE_URL}/connections/${connectionId}/resources/children${queryString}`;
 
-    // Forward request to Stack AI API with auth header
     const response = await fetch(url, {
       headers: {
         Authorization: authHeader || "",
@@ -46,6 +51,7 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
+    console.error("Error in files route:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
