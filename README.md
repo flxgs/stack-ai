@@ -13,6 +13,7 @@
 - start documenting on readme so that i dont forget later and becomes a nightmare to maintain
 - add types for the api responses
 - add a file picker component that uses the files route to fetch and display the files
+- add api client to handle all the api requests
 
 ---
 
