@@ -11,6 +11,8 @@
 - add files route that fetches the files from the stack ai api
 - add knowledge base route that creates a knowledge base from the selected files and folders
 - start documenting on readme so that i dont forget later and becomes a nightmare to maintain
+- add types for the api responses
+- add a file picker component that uses the files route to fetch and display the files
 
 ---
 
