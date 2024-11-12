@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { useApi } from "@/lib/api-context";
 import { FileNode } from "@/types/api";
@@ -12,16 +11,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   Loader2,
   FileIcon,
   FolderIcon,
   ChevronRight,
+  Sparkle,
+  Slack,
   Database,
   FileText,
-  Slack,
 } from "lucide-react";
-import { SparkleIcon } from "lucide-react";
 
 // Integration type for sidebar
 type Integration = {
@@ -36,7 +36,7 @@ const integrations: Integration[] = [
   {
     id: "google-drive",
     name: "Google Drive",
-    icon: SparkleIcon,
+    icon: Sparkle,
     enabled: true,
   },
   {
@@ -61,6 +61,7 @@ const integrations: Integration[] = [
 
 export default function FilePickerDialog() {
   const api = useApi();
+  const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIntegration, setSelectedIntegration] = useState<string | null>(
     null
@@ -70,26 +71,73 @@ export default function FilePickerDialog() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Function to handle authentication
+  const authenticate = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      await api.login("stackaitest@gmail.com", "!z4ZnxkyLYs#vR");
+      setIsAuthenticated(true);
+      return true;
+    } catch (err) {
+      console.error("Authentication error:", err);
+      setError("Failed to authenticate. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Authentication Failed",
+        description: "Please try again later.",
+      });
+      return false;
+    }
+  };
+
+  // Function to load files
+  const loadFiles = async (parentId?: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // If not authenticated, try to authenticate first
+      if (!isAuthenticated) {
+        const authSuccess = await authenticate();
+        if (!authSuccess) return;
+      }
+
+      const fileList = await api.listFiles(parentId);
+      setFiles(fileList);
+    } catch (err) {
+      console.error("Error loading files:", err);
+      setError("Failed to load files. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Error Loading Files",
+        description: "Could not load files. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Handle integration selection
   const handleIntegrationSelect = async (integrationId: string) => {
     setSelectedIntegration(integrationId);
     setError(null);
+    setFiles([]);
+    setCurrentPath([]);
+    setSelectedFiles(new Set());
 
     if (integrationId === "google-drive") {
-      try {
-        setIsLoading(true);
-        await api.login("stackaitest@gmail.com", "!z4ZnxkyLYs#vR");
-        const fileList = await api.listFiles();
-        setFiles(fileList);
-      } catch (err) {
-        setError("Failed to connect to Google Drive. Please try again.");
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
+      await loadFiles();
     } else {
       setError("This integration is not yet available.");
+      toast({
+        variant: "destructive",
+        title: "Integration Unavailable",
+        description: "This integration is not yet available.",
+      });
     }
   };
 
@@ -98,12 +146,18 @@ export default function FilePickerDialog() {
     try {
       setIsLoading(true);
       setError(null);
+
       const fileList = await api.listFiles(folder.resource_id);
       setFiles(fileList);
       setCurrentPath([...currentPath, folder.inode_path.path]);
     } catch (err) {
+      console.error("Error navigating folder:", err);
       setError("Failed to load folder contents. Please try again.");
-      console.error(err);
+      toast({
+        variant: "destructive",
+        title: "Navigation Failed",
+        description: "Could not open the folder. Please try again.",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -128,23 +182,75 @@ export default function FilePickerDialog() {
       try {
         setIsLoading(true);
         setError(null);
+
         const newPath = [...currentPath];
         newPath.pop();
         setCurrentPath(newPath);
-        // You'll need to implement logic to get the parent folder's ID
-        const fileList = await api.listFiles(/* parent folder id */);
-        setFiles(fileList);
+
+        // Get the last folder's ID from the path or undefined for root
+        const lastFolderId =
+          newPath.length > 0
+            ? files.find(
+                (f) => f.inode_path.path === newPath[newPath.length - 1]
+              )?.resource_id
+            : undefined;
+
+        await loadFiles(lastFolderId);
       } catch (err) {
+        console.error("Error navigating back:", err);
         setError("Failed to navigate back. Please try again.");
-        console.error(err);
+        toast({
+          variant: "destructive",
+          title: "Navigation Failed",
+          description: "Could not go back. Please try again.",
+        });
       } finally {
         setIsLoading(false);
       }
     }
   };
 
+  // Handle creating knowledge base
+  const handleCreateKnowledgeBase = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const kb = await api.createKnowledgeBase(Array.from(selectedFiles));
+      await api.syncKnowledgeBase(kb.knowledge_base_id);
+
+      toast({
+        title: "Success",
+        description: "Knowledge base created successfully.",
+      });
+      setIsOpen(false);
+    } catch (err) {
+      console.error("Error creating knowledge base:", err);
+      setError("Failed to create knowledge base. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Creation Failed",
+        description: "Could not create knowledge base. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Reset state when dialog closes
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      setSelectedIntegration(null);
+      setFiles([]);
+      setCurrentPath([]);
+      setSelectedFiles(new Set());
+      setError(null);
+    }
+    setIsOpen(open);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogTrigger asChild>
         <Button variant="outline">Select Files</Button>
       </DialogTrigger>
@@ -174,7 +280,7 @@ export default function FilePickerDialog() {
           </div>
 
           {/* Main Content */}
-          <div className="flex-1 p-4">
+          <div className="flex-1 p-4 relative">
             <DialogHeader>
               <DialogTitle>Select Files</DialogTitle>
               <DialogDescription>
@@ -183,7 +289,9 @@ export default function FilePickerDialog() {
             </DialogHeader>
 
             {/* Error Message */}
-            {error && <div className="text-red-500 text-sm mb-4">{error}</div>}
+            {error && (
+              <div className="text-destructive text-sm mb-4">{error}</div>
+            )}
 
             {/* Loading State */}
             {isLoading && (
@@ -219,14 +327,14 @@ export default function FilePickerDialog() {
                   {files.map((file) => (
                     <div
                       key={file.resource_id}
-                      className={`flex items-center p-2 rounded hover:bg-gray-100 cursor-pointer ${
-                        selectedFiles.has(file.resource_id) ? "bg-blue-50" : ""
-                      }`}
                       onClick={() =>
                         file.inode_type === "directory"
                           ? handleFolderClick(file)
                           : handleFileSelect(file)
                       }
+                      className={`flex items-center p-2 rounded hover:bg-gray-100 cursor-pointer ${
+                        selectedFiles.has(file.resource_id) ? "bg-blue-50" : ""
+                      }`}
                     >
                       {file.inode_type === "directory" ? (
                         <FolderIcon className="w-5 h-5 text-blue-500 mr-2" />
@@ -254,31 +362,22 @@ export default function FilePickerDialog() {
             )}
 
             {/* Action Buttons */}
-            <div className="absolute bottom-0 right-0 p-4 flex space-x-2">
+            <div className="absolute bottom-0 right-0 p-4 bg-white border-t w-full flex justify-end space-x-2">
               <Button variant="outline" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>
               <Button
-                disabled={selectedFiles.size === 0}
-                onClick={async () => {
-                  try {
-                    setIsLoading(true);
-                    const kb = await api.createKnowledgeBase(
-                      Array.from(selectedFiles)
-                    );
-                    await api.syncKnowledgeBase(kb.knowledge_base_id);
-                    setIsOpen(false);
-                  } catch (err) {
-                    setError(
-                      "Failed to create knowledge base. Please try again."
-                    );
-                    console.error(err);
-                  } finally {
-                    setIsLoading(false);
-                  }
-                }}
+                disabled={selectedFiles.size === 0 || isLoading}
+                onClick={handleCreateKnowledgeBase}
               >
-                Create Knowledge Base
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Knowledge Base"
+                )}
               </Button>
             </div>
           </div>

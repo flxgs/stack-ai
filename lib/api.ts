@@ -9,11 +9,6 @@ export class ApiClient {
   private connectionId: string | null = null;
   private orgId: string | null = null;
 
-  /**
-   * Fetches the organization ID for the authenticated user
-   * @private
-   * @throws Error if request fails
-   */
   private async fetchOrgId(): Promise<void> {
     try {
       const response = await this.fetch("/organizations/me/current");
@@ -26,11 +21,6 @@ export class ApiClient {
     }
   }
 
-  /**
-   * Fetches the Google Drive connection ID
-   * @private
-   * @throws Error if request fails or no connection found
-   */
   private async fetchConnectionId(): Promise<void> {
     try {
       const response = await this.fetch(
@@ -71,6 +61,7 @@ export class ApiClient {
       await this.fetchOrgId();
       await this.fetchConnectionId();
     } catch (error) {
+      console.error("Login error:", error);
       throw new Error("Login failed: " + (error as Error).message);
     }
   }
@@ -93,11 +84,7 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const error: ApiError = {
-        message: "API request failed",
-        status: response.status,
-      };
-      throw error;
+      throw new Error("API request failed");
     }
 
     return response;
