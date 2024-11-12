@@ -5,7 +5,8 @@ import { NextRequest, NextResponse } from "next/server";
  * Using Supabase for authentication service
  */
 const AUTH_URL = "https://sb.stack-ai.com/auth/v1/token";
-const ANON_KEY = "";
+const ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZic3VhZGZxaGtseG9rbWxodHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NzM0NTg5ODAsImV4cCI6MTk4OTAzNDk4MH0.Xjry9m7oc42_MsLRc1bZhTTzip3srDjJ6fJMkwhXQ9s";
 
 /**
  * POST handler for authentication
