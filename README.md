@@ -8,3 +8,5 @@
 - add global middleware to protect all api routes except for the auth endpoint
 - add a basic auth endpoint that uses stack ai to authenticate the user
 - add a dashboard page that has a sidebar and a header
+- add files route that fetches the files from the stack ai api
+- add knowledge base route that creates a knowledge base from the selected files and folders
