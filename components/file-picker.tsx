@@ -21,7 +21,12 @@ import {
   Slack,
   Database,
   FileText,
+  X,
+  Search,
 } from "lucide-react";
+import { Badge } from "./ui/badge";
+import { ScrollArea } from "./ui/scroll-area";
+import { Input } from "./ui/input";
 
 // Integration type for sidebar
 type Integration = {
@@ -72,6 +77,18 @@ export default function FilePickerDialog() {
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filter files based on search query
+  const filteredFiles = files.filter((file) =>
+    file.inode_path.path.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  // Get selected file details
+  const getSelectedFileDetails = () => {
+    return Array.from(selectedFiles)
+      .map((id) => files.find((f) => f.resource_id === id))
+      .filter(Boolean) as FileNode[];
+  };
 
   // Function to handle authentication
   const authenticate = async () => {
@@ -254,7 +271,7 @@ export default function FilePickerDialog() {
       <DialogTrigger asChild>
         <Button variant="outline">Select Files</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[875px] h-[600px] p-0">
+      <DialogContent className="sm:max-w-7xl h-[750px] p-0">
         <div className="flex h-full">
           {/* Sidebar */}
           <div className="w-64 border-r p-4 space-y-2">
@@ -282,11 +299,73 @@ export default function FilePickerDialog() {
           {/* Main Content */}
           <div className="flex-1 p-4 relative">
             <DialogHeader>
-              <DialogTitle>Select Files</DialogTitle>
+              <DialogTitle className="flex items-center justify-between">
+                <span>Select Files</span>
+                {selectedFiles.size > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {selectedFiles.size} file
+                    {selectedFiles.size !== 1 ? "s" : ""} selected
+                  </Badge>
+                )}
+              </DialogTitle>
               <DialogDescription>
                 Choose files to include in your knowledge base
               </DialogDescription>
             </DialogHeader>
+
+            {/* Selected Files Display */}
+            {selectedFiles.size > 0 && (
+              <div className="mb-4 mt-2">
+                <h4 className="text-sm font-medium mb-2">Selected Files:</h4>
+                <ScrollArea className="h-20 rounded-md border p-2">
+                  <div className="space-y-2">
+                    {getSelectedFileDetails().map((file) => (
+                      <div
+                        key={file.resource_id}
+                        className="flex items-center justify-between bg-muted/50 rounded-sm px-2 py-1"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <FileIcon className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm truncate max-w-[200px]">
+                            {file.inode_path.path.split("/").pop()}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFileSelect(file);
+                          }}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* Search Input - show only when files are loaded and not loading */}
+            {!isLoading && selectedIntegration && files.length > 0 && (
+              <div className="relative mb-4">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search files..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Error Message */}
             {error && (
@@ -302,7 +381,14 @@ export default function FilePickerDialog() {
 
             {/* File List */}
             {!isLoading && selectedIntegration && (
-              <div className="space-y-2 mt-4">
+              <div
+                className="space-y-2 mt-4 overflow-auto"
+                style={{
+                  maxHeight: `calc(100% - ${
+                    selectedFiles.size > 0 ? "260px" : "180px"
+                  })`,
+                }}
+              >
                 {/* Breadcrumb Navigation */}
                 {currentPath.length > 0 && (
                   <div className="flex items-center space-x-2 mb-4">
@@ -321,10 +407,31 @@ export default function FilePickerDialog() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
 
-                {/* Files and Folders */}
+            {/* File List - now using filteredFiles */}
+            {!isLoading && selectedIntegration && (
+              <div
+                className="space-y-2 mt-4 overflow-auto"
+                style={{
+                  maxHeight: `calc(100% - ${
+                    selectedFiles.size > 0 ? "320px" : "240px"
+                  })`,
+                }}
+              >
+                {/* Breadcrumb Navigation remains the same */}
+
+                {/* No Results Message */}
+                {filteredFiles.length === 0 && searchQuery && (
+                  <div className="text-center text-muted-foreground py-8">
+                    No files found matching "{searchQuery}"
+                  </div>
+                )}
+
+                {/* Files and Folders - now using filteredFiles */}
                 <div className="space-y-2">
-                  {files.map((file) => (
+                  {filteredFiles.map((file) => (
                     <div
                       key={file.resource_id}
                       onClick={() =>
@@ -341,8 +448,12 @@ export default function FilePickerDialog() {
                       ) : (
                         <FileIcon className="w-5 h-5 text-gray-500 mr-2" />
                       )}
+                      {/* Highlight matching text */}
                       <span className="flex-1">
-                        {file.inode_path.path.split("/").pop()}
+                        {highlightMatch(
+                          file.inode_path.path.split("/").pop() || "",
+                          searchQuery
+                        )}
                       </span>
                       {file.inode_type === "file" && (
                         <input
@@ -384,5 +495,25 @@ export default function FilePickerDialog() {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Helper function to highlight matching text
+function highlightMatch(text: string, query: string) {
+  if (!query) return text;
+
+  const parts = text.split(new RegExp(`(${query})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <span key={i} className="bg-yellow-100 rounded px-0.5">
+            {part}
+          </span>
+        ) : (
+          part
+        )
+      )}
+    </>
   );
 }
