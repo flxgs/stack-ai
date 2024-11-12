@@ -29,9 +29,10 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Notes and some thought process
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- here ill be taking some notes while i build this
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# stack-ai
+- first create basic nextjs app with app router
+- add basic folder structure for the api calls (api/knowledge-base, api/files, api/auth). this is the most important stuff
+- add all the shadcn ui components for the frontend
