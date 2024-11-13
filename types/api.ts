@@ -7,6 +7,7 @@ export interface FileNode {
   status?: "pending" | "indexed" | "failed";
   created_at: string;
   updated_at: string;
+  modified_at?: number;
 }
 
 export interface KnowledgeBase {
@@ -19,3 +20,5 @@ export interface ApiError {
   message: string;
   status: number;
 }
+
+export type SortOption = "name_asc" | "name_desc" | "date_asc" | "date_desc";

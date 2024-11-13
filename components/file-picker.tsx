@@ -1,9 +1,16 @@
 "use client";
 import Image from "next/image";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { useState } from "react";
 import { useApi } from "@/lib/api-context";
-import { FileNode } from "@/types/api";
+import { FileNode, SortOption } from "@/types/api";
 import {
   Dialog,
   DialogContent,
@@ -99,10 +106,34 @@ export default function FilePickerDialog() {
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortOption, setSortOption] = useState<SortOption>("name_asc");
+
+  // Sort files based on sort option
+  const sortFiles = (files: FileNode[]) => {
+    return [...files].sort((a, b) => {
+      const nameA = a.inode_path.path.split("/").pop() || "";
+      const nameB = b.inode_path.path.split("/").pop() || "";
+
+      switch (sortOption) {
+        case "name_asc":
+          return nameA.localeCompare(nameB);
+        case "name_desc":
+          return nameB.localeCompare(nameA);
+        case "date_asc":
+          return (a.modified_at || 0) - (b.modified_at || 0);
+        case "date_desc":
+          return (b.modified_at || 0) - (a.modified_at || 0);
+        default:
+          return 0;
+      }
+    });
+  };
 
   // Filter files based on search query
-  const filteredFiles = files.filter((file) =>
-    file.inode_path.path.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredFiles = sortFiles(
+    files.filter((file) =>
+      file.inode_path.path.toLowerCase().includes(searchQuery.toLowerCase())
+    )
   );
   // Get selected file details
   const getSelectedFileDetails = () => {
@@ -332,7 +363,10 @@ export default function FilePickerDialog() {
               <DialogTitle className="flex items-center justify-between">
                 <span>Select Files</span>
                 {selectedFiles.size > 0 && (
-                  <Badge variant="secondary" className="ml-2">
+                  <Badge
+                    variant="secondary"
+                    className="mr-16 text-lg bg-blue-600 text-white"
+                  >
                     {selectedFiles.size} file
                     {selectedFiles.size !== 1 ? "s" : ""} selected
                   </Badge>
@@ -378,22 +412,42 @@ export default function FilePickerDialog() {
 
             {/* Search Input - show only when files are loaded and not loading */}
             {!isLoading && selectedIntegration && files.length > 0 && (
-              <div className="relative mb-4">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search files..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+              <div className="flex gap-4 mb-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search files..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <Select
+                  value={sortOption}
+                  onValueChange={(value) => setSortOption(value as SortOption)}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Sort by..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name_asc">Name (A to Z)</SelectItem>
+                    <SelectItem value="name_desc">Name (Z to A)</SelectItem>
+                    <SelectItem value="date_asc">
+                      Date (Oldest first)
+                    </SelectItem>
+                    <SelectItem value="date_desc">
+                      Date (Newest first)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
