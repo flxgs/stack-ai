@@ -2,61 +2,20 @@
 
 A robust File Picker implementation for Stack AI's Google Drive integration, built with Next.js 14+ App Router. This component enables seamless file selection, knowledge base creation, and indexing management.
 
-## 📚 Table of Contents
+## 🔧 Development
 
-- [Features](#-features)
-- [Quick Start](#-quick-start)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [API Reference](#-api-reference)
-- [Component Reference](#-component-reference)
-- [Architecture](#-architecture)
-- [Development](#-development)
-- [Troubleshooting](#-troubleshooting)
-
-## 🚀 Features
-
-### Core Features
-
-- **Google Drive Integration**
-  - Seamless browsing with nested navigation
-  - Real-time file/folder status updates
-  - Multi-select capability
-
-### Knowledge Base Management
-
-- **Creation & Indexing**
-  - One-click knowledge base creation
-  - Automatic file indexing
-  - Progress tracking
-
-### User Experience
-
-- **Modern Interface**
-  - Responsive design
-  - Drag-and-drop support
-  - Loading states & error handling
-
-### Security
-
-- **Built-in Protection**
-  - API route protection
-  - Token-based authentication
-  - Secure data handling
-
-## 🏃 Quick Start
+### Local Development
 
 ```bash
-# Install dependencies
-npm install @stack-ai/file-picker
+npm run dev
+# Visit http://localhost:3000
+```
 
-# Add to your Next.js project
-import { FilePicker } from "@stack-ai/file-picker";
+### Building for Production
 
-# Basic usage
-export default function App() {
-  return <FilePicker onSelect={files => console.log(files)} />;
-}
+```bash
+npm run build
+npm start
 ```
 
 ## 🛠 Installation
@@ -206,78 +165,11 @@ interface ApiClient {
 }
 ```
 
-## 🏗 Architecture
-
-### Project Structure
-
-```
-src/
-├── app/                    # Next.js app directory
-│   ├── api/               # API routes
-│   └── page.tsx           # Main page
-├── components/            # React components
-├── lib/                   # Utilities & services
-└── types/                # TypeScript definitions
-```
-
 ### Key Technologies
 
 - Next.js 14+ (App Router)
 - ShadcnUI Components
 - TypeScript
 - Stack AI API Integration
-
-## 🔧 Development
-
-### Local Development
-
-```bash
-npm run dev
-# Visit http://localhost:3000
-```
-
-### Building for Production
-
-```bash
-npm run build
-npm start
-```
-
-### Testing
-
-```bash
-npm run test        # Run tests
-npm run test:watch  # Watch mode
-```
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-1. **Authentication Errors**
-
-   ```typescript
-   // Check token expiration
-   if (error.status === 401) {
-     await apiClient.login(email, password);
-   }
-   ```
-
-2. **File Selection Issues**
-
-   - Ensure file types are supported
-   - Check maxSelection limit
-   - Verify connection ID is valid
-
-3. **Indexing Problems**
-   - Monitor sync status
-   - Check file permissions
-   - Verify file content is accessible
-
-### Debug Mode
-
-```typescript
-<FilePicker debug={true} />
-```
 
 ---
