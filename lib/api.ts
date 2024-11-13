@@ -1,50 +1,62 @@
 import { FileNode, KnowledgeBase } from "@/types/api";
 
-export class ApiClient {
-  private accessToken: string | null = null;
-  private connectionId: string | null = null;
-  private orgId: string | null = null;
+interface ApiClient {
+  login(email: string, password: string): Promise<void>;
+  listFiles(parentId?: string): Promise<FileNode[]>;
+  createKnowledgeBase(resourceIds: string[]): Promise<KnowledgeBase>;
+  syncKnowledgeBase(knowledgeBaseId: string): Promise<void>;
+}
 
-  constructor() {
-    this.accessToken = null;
-    this.connectionId = null;
-    this.orgId = null;
-  }
+export const createApiClient = (): ApiClient => {
+  let accessToken: string | null = null;
+  let connectionId: string | null = null;
+  let orgId: string | null = null;
 
-  async login(email: string, password: string): Promise<void> {
-    try {
-      const response = await fetch("/api/auth", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
+  const fetchWithAuth = async (
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<Response> => {
+    if (!accessToken) throw new Error("Not authenticated");
 
-      if (!response.ok) {
-        throw new Error("Authentication failed");
-      }
+    const response = await fetch(`/api${endpoint}`, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
 
-      const data = await response.json();
-      this.accessToken = data.access_token;
+    if (!response.ok) throw new Error("API request failed");
 
-      // After getting the token, fetch org and connection IDs
-      await this.fetchOrgId();
-      await this.fetchConnectionId();
-    } catch (error) {
-      console.error("Login error:", error);
-      throw error;
-    }
-  }
+    return response;
+  };
 
-  private async fetchOrgId(): Promise<void> {
-    const response = await this.fetch("/organizations/me/current");
+  const login = async (email: string, password: string): Promise<void> => {
+    const response = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!response.ok) throw new Error("Authentication failed");
+
     const data = await response.json();
-    this.orgId = data.org_id;
-  }
+    accessToken = data.access_token;
 
-  private async fetchConnectionId(): Promise<void> {
-    const response = await this.fetch(
+    // Fetch org and connection IDs after authentication
+    await fetchOrgId();
+    await fetchConnectionId();
+  };
+
+  const fetchOrgId = async (): Promise<void> => {
+    const response = await fetchWithAuth("/organizations/me/current");
+    const data = await response.json();
+    orgId = data.org_id;
+  };
+
+  const fetchConnectionId = async (): Promise<void> => {
+    const response = await fetchWithAuth(
       "/connections?connection_provider=gdrive&limit=1"
     );
     const connections = await response.json();
@@ -53,32 +65,30 @@ export class ApiClient {
       throw new Error("No Google Drive connection found");
     }
 
-    this.connectionId = connections[0].connection_id;
-  }
+    connectionId = connections[0].connection_id;
+  };
 
-  async listFiles(parentId?: string): Promise<FileNode[]> {
-    if (!this.connectionId) {
-      throw new Error("No connection ID available");
-    }
+  const listFiles = async (parentId?: string): Promise<FileNode[]> => {
+    if (!connectionId) throw new Error("No connection ID available");
 
     const queryParams = new URLSearchParams({
-      connectionId: this.connectionId,
+      connectionId,
       ...(parentId && { resourceId: parentId }),
     });
 
-    const response = await this.fetch(`/files?${queryParams}`);
+    const response = await fetchWithAuth(`/files?${queryParams}`);
     return response.json();
-  }
+  };
 
-  async createKnowledgeBase(resourceIds: string[]): Promise<KnowledgeBase> {
-    if (!this.connectionId) {
-      throw new Error("No connection ID available");
-    }
+  const createKnowledgeBase = async (
+    resourceIds: string[]
+  ): Promise<KnowledgeBase> => {
+    if (!connectionId) throw new Error("No connection ID available");
 
-    const response = await this.fetch("/knowledge-base", {
+    const response = await fetchWithAuth("/knowledge-base", {
       method: "POST",
       body: JSON.stringify({
-        connection_id: this.connectionId,
+        connection_id: connectionId,
         connection_source_ids: resourceIds,
         indexing_params: {
           ocr: false,
@@ -96,47 +106,23 @@ export class ApiClient {
       }),
     });
     return response.json();
-  }
+  };
 
-  async syncKnowledgeBase(knowledgeBaseId: string): Promise<void> {
-    if (!this.orgId) {
-      throw new Error("No organization ID available");
-    }
+  const syncKnowledgeBase = async (knowledgeBaseId: string): Promise<void> => {
+    if (!orgId) throw new Error("No organization ID available");
 
-    await this.fetch(
-      `/knowledge-base/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${this.orgId}`,
+    await fetchWithAuth(
+      `/knowledge-base/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${orgId}`,
       { method: "POST" }
     );
-  }
+  };
 
-  private async fetch(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<Response> {
-    if (!this.accessToken) {
-      throw new Error("Not authenticated");
-    }
+  return {
+    login,
+    listFiles,
+    createKnowledgeBase,
+    syncKnowledgeBase,
+  };
+};
 
-    const response = await fetch(`/api${endpoint}`, {
-      ...options,
-      headers: {
-        ...options.headers,
-        Authorization: `Bearer ${this.accessToken}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error("API request failed");
-    }
-
-    return response;
-  }
-
-  // Getters
-  getAccessToken = () => this.accessToken;
-  getConnectionId = () => this.connectionId;
-  getOrgId = () => this.orgId;
-}
-
-export const apiClient = new ApiClient();
+export const apiClient = createApiClient();

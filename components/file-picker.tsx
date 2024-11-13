@@ -1,4 +1,6 @@
 "use client";
+import Image from "next/image";
+
 import { useState } from "react";
 import { useApi } from "@/lib/api-context";
 import { FileNode } from "@/types/api";
@@ -27,12 +29,17 @@ import {
 import { Badge } from "./ui/badge";
 import { ScrollArea } from "./ui/scroll-area";
 import { Input } from "./ui/input";
+import drive from "@/public/drive.svg";
+import confluence from "@/public/confluence.svg";
+import dropbox from "@/public/dropbox.svg";
+import github from "@/public/github.svg";
+import slack from "@/public/slack.svg";
 
 // Integration type for sidebar
 type Integration = {
   id: string;
   name: string;
-  icon: React.ComponentType<any>;
+  icon: string | React.ComponentType<{ className?: string }>;
   enabled: boolean;
 };
 
@@ -41,8 +48,14 @@ const integrations: Integration[] = [
   {
     id: "google-drive",
     name: "Google Drive",
-    icon: Sparkle,
+    icon: drive.src,
     enabled: true,
+  },
+  {
+    id: "dropbox",
+    name: "Dropbox",
+    icon: dropbox.src,
+    enabled: false,
   },
   {
     id: "notion",
@@ -53,13 +66,19 @@ const integrations: Integration[] = [
   {
     id: "confluence",
     name: "Confluence",
-    icon: FileText,
+    icon: confluence.src,
     enabled: false,
   },
   {
     id: "slack",
     name: "Slack",
-    icon: Slack,
+    icon: slack.src,
+    enabled: false,
+  },
+  {
+    id: "github",
+    name: "Github",
+    icon: github.src,
     enabled: false,
   },
 ];
@@ -287,7 +306,16 @@ export default function FilePickerDialog() {
                 }`}
                 disabled={!integration.enabled}
               >
-                <integration.icon className="w-5 h-5" />
+                {typeof integration.icon === "string" ? (
+                  <Image
+                    src={integration.icon}
+                    alt={integration.name}
+                    width={20}
+                    height={20}
+                  />
+                ) : (
+                  <integration.icon className="w-5 h-5" />
+                )}{" "}
                 <span>{integration.name}</span>
                 {integration.enabled && (
                   <ChevronRight className="w-4 h-4 ml-auto" />
