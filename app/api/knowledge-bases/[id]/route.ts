@@ -97,25 +97,34 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const headersList = await headers();
     const authHeader = headersList.get("authorization");
 
-    if (!authHeader) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Get ID from context params
+    const { id } = await params;
 
     const body = await request.json();
+    const { connection_source_ids } = body;
 
-    const response = await fetch(`${BASE_URL}/knowledge_bases/${params.id}`, {
+    console.log("[KB Update Route] Request:", {
+      id,
+      connection_source_ids,
+    });
+
+    const stackAiUrl = `${BASE_URL}/knowledge_bases/${id}`;
+
+    const response = await fetch(stackAiUrl, {
       method: "PATCH",
       headers: {
-        Authorization: authHeader,
+        Authorization: authHeader || "",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        connection_source_ids,
+      }),
     });
 
     if (!response.ok) {
@@ -132,9 +141,12 @@ export async function PATCH(
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error in knowledge base update:", error);
+    console.error("[KB Update Route] Unexpected error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Failed to update knowledge base",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

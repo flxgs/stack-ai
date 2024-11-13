@@ -5,12 +5,12 @@ const BASE_URL = "https://api.stack-ai.com";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { knowledgeBaseId: string; orgId: string } }
+  { params }: { params: Promise<{ knowledgeBaseId: string; orgId: string }> }
 ) {
   try {
     const headersList = await headers();
     const authHeader = headersList.get("authorization");
-    const { knowledgeBaseId, orgId } = params;
+    const { knowledgeBaseId, orgId } = await params;
 
     console.log("[Sync Route] Request params:", { knowledgeBaseId, orgId });
 
