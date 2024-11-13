@@ -17,6 +17,9 @@ export interface FileNode {
   mime_type?: string;
 }
 
+export interface KnowledgeBaseResponse {
+  admin: KnowledgeBaseList[];
+}
 // Knowledge Base related types
 export interface KnowledgeBaseBase {
   knowledge_base_id: string;
@@ -124,3 +127,5 @@ export const DEFAULT_INDEXING_PARAMS: KnowledgeBase["indexing_params"] = {
     chunker: "sentence",
   },
 };
+
+export type StatusVariant = "default" | "secondary" | "destructive";

@@ -64,3 +64,44 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * GET handler to list all knowledge bases
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const headersList = await headers();
+    const authHeader = headersList.get("authorization");
+
+    if (!authHeader) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const response = await fetch(`${BASE_URL}/knowledge_bases`, {
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      return NextResponse.json(
+        {
+          error: "Failed to fetch knowledge bases",
+          details: errorData,
+        },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error in knowledge base route:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

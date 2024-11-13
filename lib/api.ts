@@ -3,16 +3,20 @@ import {
   FileNode,
   KnowledgeBase,
   KnowledgeBaseList,
+  KnowledgeBaseResponse,
   SyncResponse,
 } from "@/types/api";
 
-interface ApiClient {
+export interface ApiClient {
   login(email: string, password: string): Promise<void>;
   listFiles(parentId?: string): Promise<FileNode[]>;
-  createKnowledgeBase(resourceIds: string[]): Promise<KnowledgeBase>;
-  syncKnowledgeBase(knowledgeBaseId: string): Promise<SyncResponse>;
-  getKnowledgeBaseStatus(knowledgeBaseId: string): Promise<any>;
   listKnowledgeBases(): Promise<KnowledgeBaseList[]>;
+  createKnowledgeBase(fileIds: string[]): Promise<KnowledgeBase>;
+  syncKnowledgeBase(kbId: string): Promise<SyncResponse>;
+  getKnowledgeBaseResources(
+    knowledgeBaseId: string,
+    resourcePath?: string
+  ): Promise<FileNode[]>;
 }
 
 export const createApiClient = (): ApiClient => {
@@ -207,12 +211,23 @@ export const createApiClient = (): ApiClient => {
     }
   };
 
+  const getKnowledgeBaseResources = async (
+    knowledgeBaseId: string,
+    resourcePath: string = "/"
+  ): Promise<FileNode[]> => {
+    const queryParams = new URLSearchParams({ resource_path: resourcePath });
+    const response = await fetchWithAuth(
+      `/knowledge-base/${knowledgeBaseId}/resources/children?${queryParams}`
+    );
+    return response.json();
+  };
+
   return {
     login,
     listFiles,
     createKnowledgeBase,
     syncKnowledgeBase,
-    getKnowledgeBaseStatus,
+    getKnowledgeBaseResources,
     listKnowledgeBases,
   };
 };

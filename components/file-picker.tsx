@@ -10,7 +10,12 @@ import {
 
 import { useState } from "react";
 import { useApi } from "@/lib/api-context";
-import { FileNode, SortOption } from "@/types/api";
+import {
+  FileNode,
+  KnowledgeBaseList,
+  SortOption,
+  StatusVariant,
+} from "@/types/api";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +38,10 @@ import {
   X,
   Search,
   Sparkles,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  XCircle,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { ScrollArea } from "./ui/scroll-area";
@@ -108,6 +117,54 @@ export default function FilePickerDialog() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOption, setSortOption] = useState<SortOption>("name_asc");
+  const [showKBView, setShowKBView] = useState(false);
+  const [kbs, setKbs] = useState<KnowledgeBaseList[]>([]);
+  const [viewingKB, setViewingKB] = useState<string | null>(null);
+  const [selectedKnowledgeBase, setSelectedKnowledgeBase] =
+    useState<KnowledgeBaseList | null>(null);
+
+  const loadKnowledgeBases = async () => {
+    try {
+      setIsLoading(true);
+      const knowledgeBases = await api.listKnowledgeBases();
+      setKbs(knowledgeBases);
+
+      // Set the first knowledge base as default if available
+      if (knowledgeBases.length > 0) {
+        setSelectedKnowledgeBase(knowledgeBases[0]);
+        // Load files for the selected knowledge base
+        await loadKnowledgeBaseFiles(knowledgeBases[0].knowledge_base_id);
+      }
+    } catch (error) {
+      console.error("Error loading knowledge bases:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not load knowledge bases",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load files for a specific knowledge base
+  const loadKnowledgeBaseFiles = async (kbId: string) => {
+    try {
+      setIsLoading(true);
+      const resources = await api.getKnowledgeBaseResources(kbId);
+      setFiles(Array.isArray(resources) ? resources : []);
+      setCurrentPath([]);
+    } catch (error) {
+      console.error("Error loading knowledge base files:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not load knowledge base files",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Sort files based on sort option
   const sortFiles = (files: FileNode[]) => {
@@ -195,20 +252,86 @@ export default function FilePickerDialog() {
   const handleIntegrationSelect = async (integrationId: string) => {
     setSelectedIntegration(integrationId);
     setError(null);
-    setFiles([]);
-    setCurrentPath([]);
-    setSelectedFiles(new Set());
 
     if (integrationId === "google-drive") {
-      await loadFiles();
-    } else {
-      setError("This integration is not yet available.");
-      toast({
-        variant: "destructive",
-        title: "Integration Unavailable",
-        description: "This integration is not yet available.",
-      });
+      try {
+        setIsLoading(true);
+        await authenticate();
+        await loadKnowledgeBases(); // This will also load files for the default KB
+      } catch (error) {
+        setError("Failed to load content");
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Could not load content",
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const KnowledgeBaseSelector = () => {
+    if (!isAuthenticated || kbs.length === 0) return null;
+
+    return (
+      <div className="flex items-center gap-4 mb-4">
+        <Select
+          value={selectedKnowledgeBase?.knowledge_base_id}
+          onValueChange={async (value) => {
+            const kb = kbs.find((kb) => kb.knowledge_base_id === value);
+            if (kb) {
+              setSelectedKnowledgeBase(kb);
+              await loadKnowledgeBaseFiles(kb.knowledge_base_id);
+            }
+          }}
+        >
+          <SelectTrigger className="w-[300px]">
+            <SelectValue placeholder="Select Knowledge Base">
+              {selectedKnowledgeBase?.name || "Select Knowledge Base"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {Array.isArray(kbs) && kbs.length > 0 ? (
+              kbs.map((kb) => (
+                <SelectItem
+                  key={kb.knowledge_base_id}
+                  value={kb.knowledge_base_id}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span>{kb.name || "Unnamed Knowledge Base"}</span>
+                    <Badge
+                      variant={kb.is_empty ? "secondary" : "default"}
+                      className="ml-2"
+                    >
+                      {kb.is_empty
+                        ? "Empty"
+                        : `${kb.connection_source_ids.length} files`}
+                    </Badge>
+                  </div>
+                </SelectItem>
+              ))
+            ) : (
+              <SelectItem value="no-kbs">
+                <div className="text-center text-muted-foreground py-4">
+                  No knowledge bases available
+                </div>
+              </SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowKBView(true)}
+          className="flex items-center gap-2"
+        >
+          <Database className="w-4 h-4" />
+          Manage Knowledge Bases
+        </Button>
+      </div>
+    );
   };
 
   // Handle folder navigation
@@ -304,17 +427,29 @@ export default function FilePickerDialog() {
     }
   };
 
+  const refreshKBs = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const knowledgeBases = await api.listKnowledgeBases();
+      setKbs(Array.isArray(knowledgeBases) ? knowledgeBases : []);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not refresh knowledge bases",
+      });
+    }
+  };
+
   // Handle creating knowledge base
   const handleCreateKnowledgeBase = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Create knowledge base
       const kb = await api.createKnowledgeBase(Array.from(selectedFiles));
       console.log("Knowledge base created:", kb);
 
-      // Sync knowledge base
       const syncResult = await api.syncKnowledgeBase(kb.knowledge_base_id);
       console.log("Sync result:", syncResult);
 
@@ -323,6 +458,7 @@ export default function FilePickerDialog() {
           title: "Success",
           description: "Knowledge base created and sync started successfully.",
         });
+        await refreshKBs(); // Refresh the KBs list
         setIsOpen(false);
       } else {
         throw new Error(`Sync failed: ${syncResult.message}`);
@@ -347,8 +483,67 @@ export default function FilePickerDialog() {
       setCurrentPath([]);
       setSelectedFiles(new Set());
       setError(null);
+      setShowKBView(false);
+      setViewingKB(null);
+      setKbs([]);
     }
     setIsOpen(open);
+  };
+
+  const viewKBContents = async (kbId: string) => {
+    try {
+      setIsLoading(true);
+      const resources = await api.getKnowledgeBaseResources(kbId);
+      setFiles(Array.isArray(resources) ? resources : []);
+      setViewingKB(kbId);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not load knowledge base contents",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getStatusVariant = (status?: string): StatusVariant => {
+    switch (status?.toLowerCase()) {
+      case "indexed":
+        return "default";
+      case "pending":
+        return "secondary";
+      case "failed":
+        return "destructive";
+      default:
+        return "secondary";
+    }
+  };
+
+  const getStatusIcon = (status?: string) => {
+    switch (status?.toLowerCase()) {
+      case "indexed":
+        return <CheckCircle className="h-4 w-4" />;
+      case "pending":
+        return <Clock className="h-4 w-4" />;
+      case "failed":
+        return <XCircle className="h-4 w-4" />;
+      default:
+        return <AlertCircle className="h-4 w-4" />;
+    }
+  };
+
+  const getStatusColor = (status?: string): string => {
+    switch (status?.toLowerCase()) {
+      case "indexed":
+        return "text-green-500";
+      case "pending":
+        return "text-blue-500";
+      case "failed":
+        return "text-red-500";
+      default:
+        return "text-gray-500";
+    }
   };
 
   return (
@@ -388,271 +583,342 @@ export default function FilePickerDialog() {
                 )}
               </button>
             ))}
-            <KnowledgeBasesList />
+            {isAuthenticated && (
+              <div className="border-t pt-4">
+                <Button
+                  variant="outline"
+                  className="w-full flex items-center justify-between"
+                  onClick={() => setShowKBView(!showKBView)}
+                >
+                  <span className="flex items-center">
+                    <Database className="w-4 h-4 mr-2" />
+                    Knowledge Bases
+                  </span>
+                  <Badge variant="secondary">{kbs?.length || 0}</Badge>
+                </Button>
+              </div>
+            )}
           </div>
 
-          {/* Main Content */}
-          <div className="flex-1 p-4 relative">
-            <DialogHeader>
-              <DialogTitle className="flex items-center justify-between">
-                <span>Select Files</span>
-                {selectedFiles.size > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className="mr-16 text-md bg-blue-600 text-white"
+          {showKBView ? (
+            <div className="flex-1 p-4 relative">
+              <DialogHeader>
+                <div className="flex items-center justify-between">
+                  <DialogTitle>Knowledge Bases</DialogTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowKBView(false)}
                   >
-                    {selectedFiles.size} file
-                    {selectedFiles.size !== 1 ? "s" : ""} selected
-                  </Badge>
-                )}
-              </DialogTitle>
-              <DialogDescription>
-                Choose files to include in your knowledge base
-              </DialogDescription>
-            </DialogHeader>
+                    Back to Files
+                  </Button>
+                </div>
+                <DialogDescription>
+                  Your indexed documents and knowledge bases
+                </DialogDescription>
+              </DialogHeader>
 
-            {/* Selected Files Display */}
-            {selectedFiles.size > 0 && (
-              <div className="mb-4 mt-2">
-                <h4 className="text-sm font-medium mb-2">Selected Files:</h4>
-                <ScrollArea className="h-20 rounded-md border p-2">
-                  <div className="space-y-2">
-                    {getSelectedFileDetails().map((file) => (
-                      <div
-                        key={file.resource_id}
-                        className="flex items-center justify-between bg-muted/50 rounded-sm px-2 py-1"
+              {/* KB List */}
+              <div className="mt-4">
+                {kbs?.map((kb) => (
+                  <div
+                    key={kb.knowledge_base_id}
+                    className="flex items-center justify-between p-4 border rounded-lg mb-2"
+                  >
+                    <div>
+                      <h3 className="font-medium">
+                        {kb.name || "Unnamed Knowledge Base"}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {kb.connection_source_ids.length} files
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getStatusVariant(kb.status)}>
+                        {kb.status || "Unknown"}
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => viewKBContents(kb.knowledge_base_id)}
                       >
-                        <div className="flex items-center space-x-2">
-                          {file.inode_type === "directory" ? (
-                            <FolderIcon className="w-4 h-4 text-blue-500" />
-                          ) : (
-                            <FileIcon className="w-4 h-4 text-muted-foreground" />
-                          )}
-                          <span className="text-sm truncate max-w-[200px]">
-                            {file.inode_path.path.split("/").pop()}
-                          </span>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleFileSelect(file);
-                          }}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
-
-            {/* Search Input - show only when files are loaded and not loading */}
-            {!isLoading && selectedIntegration && files.length > 0 && (
-              <div className="flex gap-4 mb-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search files..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-                <Select
-                  value={sortOption}
-                  onValueChange={(value) => setSortOption(value as SortOption)}
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Sort by..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name_asc">Name (A to Z)</SelectItem>
-                    <SelectItem value="name_desc">Name (Z to A)</SelectItem>
-                    <SelectItem value="date_asc">
-                      Date (Oldest first)
-                    </SelectItem>
-                    <SelectItem value="date_desc">
-                      Date (Newest first)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Error Message */}
-            {error && (
-              <div className="text-destructive text-sm mb-4">{error}</div>
-            )}
-
-            {/* Loading State */}
-            {isLoading && (
-              <div className="space-y-3 mb-24">
-                {/* File Header Skeleton */}
-                <div className="flex items-center space-x-2 mb-6">
-                  <Skeleton className="h-4 w-[100px]" />
-                  <Skeleton className="h-4 w-4" />
-                  <Skeleton className="h-4 w-[100px]" />
-                </div>
-
-                {/* File Row Skeletons */}
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="flex items-center space-x-4 p-2">
-                    <Skeleton className="h-5 w-5" /> {/* Icon */}
-                    <Skeleton className="h-4 flex-grow" /> {/* Filename */}
-                    <Skeleton className="h-4 w-4" /> {/* Checkbox */}
+                        View Files
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
-            )}
+            </div>
+          ) : (
+            /* Main Content */
+            <div className="flex-1 p-4 relative">
+              <DialogHeader>
+                <DialogTitle className="flex items-center justify-between">
+                  <span>Select Files</span>
+                  {selectedFiles.size > 0 && (
+                    <Badge
+                      variant="secondary"
+                      className="mr-16 text-md bg-blue-600 text-white"
+                    >
+                      {selectedFiles.size} file
+                      {selectedFiles.size !== 1 ? "s" : ""} selected
+                    </Badge>
+                  )}
+                </DialogTitle>
+                <DialogDescription>
+                  Choose files to include in your knowledge base
+                </DialogDescription>
+              </DialogHeader>
 
-            {/* File List */}
-            {!isLoading && selectedIntegration && (
-              <div
-                className="space-y-2 mt-4 overflow-auto"
-                style={{
-                  maxHeight: `calc(100% - ${
-                    selectedFiles.size > 0 ? "260px" : "180px"
-                  })`,
-                }}
-              >
-                {/* Breadcrumb Navigation */}
-                {currentPath.length > 0 && (
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Button variant="ghost" size="sm" onClick={handleBack}>
-                      Back
-                    </Button>
-                    <div className="flex items-center">
-                      {currentPath.map((path, index) => (
-                        <div key={path} className="flex items-center">
-                          {index > 0 && (
-                            <ChevronRight className="w-4 h-4 mx-1" />
-                          )}
-                          <span>{path}</span>
+              {!showKBView && <KnowledgeBaseSelector />}
+
+              {/* Selected Files Display */}
+              {selectedFiles.size > 0 && (
+                <div className="mb-4 mt-2">
+                  <h4 className="text-sm font-medium mb-2">Selected Files:</h4>
+                  <ScrollArea className="h-20 rounded-md border p-2">
+                    <div className="space-y-2">
+                      {getSelectedFileDetails().map((file) => (
+                        <div
+                          key={file.resource_id}
+                          className="flex items-center justify-between bg-muted/50 rounded-sm px-2 py-1"
+                        >
+                          <div className="flex items-center space-x-2">
+                            {file.inode_type === "directory" ? (
+                              <FolderIcon className="w-4 h-4 text-blue-500" />
+                            ) : (
+                              <FileIcon className="w-4 h-4 text-muted-foreground" />
+                            )}
+                            <span className="text-sm truncate max-w-[200px]">
+                              {file.inode_path.path.split("/").pop()}
+                            </span>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFileSelect(file);
+                            }}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  </ScrollArea>
+                </div>
+              )}
 
-            {/* File List - now using filteredFiles */}
-            {!isLoading && selectedIntegration && (
-              <div
-                className="space-y-2 mt-4 overflow-auto"
-                style={{
-                  maxHeight: `calc(100% - ${
-                    selectedFiles.size > 0 ? "320px" : "240px"
-                  })`,
-                }}
-              >
-                {/* Breadcrumb Navigation remains the same */}
-
-                {/* No Results Message */}
-                {filteredFiles.length === 0 && searchQuery && (
-                  <div className="text-center text-muted-foreground py-8">
-                    No files found matching &quot;{searchQuery}&quot;
-                  </div>
-                )}
-
-                {/* Files and Folders - now using filteredFiles */}
-                <div className="space-y-2 text-sm">
-                  {filteredFiles.map((file) => (
-                    <div
-                      key={file.resource_id}
-                      className={`flex items-center p-2 rounded hover:bg-gray-100 cursor-pointer ${
-                        selectedFiles.has(file.resource_id) ? "bg-blue-50" : ""
-                      }`}
-                    >
-                      {/* Left side: Icon and Name - clickable for navigation */}
-                      <div
-                        className="flex items-center flex-1"
-                        onClick={() =>
-                          file.inode_type === "directory"
-                            ? handleFolderClick(file)
-                            : undefined
-                        }
+              {/* Search Input - show only when files are loaded and not loading */}
+              {!isLoading && selectedIntegration && files.length > 0 && (
+                <div className="flex gap-4 mb-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search files..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
                       >
-                        {file.inode_type === "directory" ? (
-                          <FolderIcon className="w-5 h-5 text-blue-500 mr-2" />
-                        ) : (
-                          <FileIcon className="w-5 h-5 text-gray-500 mr-2" />
-                        )}
-                        <span className="flex-1">
-                          {highlightMatch(
-                            file.inode_path.path.split("/").pop() || "",
-                            searchQuery
-                          )}
-                        </span>
-                      </div>
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <Select
+                    value={sortOption}
+                    onValueChange={(value) =>
+                      setSortOption(value as SortOption)
+                    }
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Sort by..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name_asc">Name (A to Z)</SelectItem>
+                      <SelectItem value="name_desc">Name (Z to A)</SelectItem>
+                      <SelectItem value="date_asc">
+                        Date (Oldest first)
+                      </SelectItem>
+                      <SelectItem value="date_desc">
+                        Date (Newest first)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-                      {/* Right side: Actions */}
-                      <div className="flex items-center gap-2">
-                        {/* Show checkbox for both files and folders */}
-                        <input
-                          type="checkbox"
-                          checked={selectedFiles.has(file.resource_id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleFileSelect(file);
-                          }}
-                          className="ml-2"
-                        />
-                        {/* Optional: Add folder navigation button */}
-                        {file.inode_type === "directory" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="p-1 h-6 w-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleFolderClick(file);
-                            }}
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
+              {/* Error Message */}
+              {error && (
+                <div className="text-destructive text-sm mb-4">{error}</div>
+              )}
+
+              {/* Loading State */}
+              {isLoading && (
+                <div className="space-y-3 mb-24">
+                  {/* File Header Skeleton */}
+                  <div className="flex items-center space-x-2 mb-6">
+                    <Skeleton className="h-4 w-[100px]" />
+                    <Skeleton className="h-4 w-4" />
+                    <Skeleton className="h-4 w-[100px]" />
+                  </div>
+
+                  {/* File Row Skeletons */}
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="flex items-center space-x-4 p-2">
+                      <Skeleton className="h-5 w-5" /> {/* Icon */}
+                      <Skeleton className="h-4 flex-grow" /> {/* Filename */}
+                      <Skeleton className="h-4 w-4" /> {/* Checkbox */}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Action Buttons */}
-            <div className="absolute bottom-0 right-0 p-4 bg-white border-t w-full flex justify-end space-x-2 ">
-              <Button variant="outline" onClick={() => setIsOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                disabled={selectedFiles.size === 0 || isLoading}
-                onClick={handleCreateKnowledgeBase}
-                className="rounded-lg shadow flex flex-row items-center gap-2 bg-violet-600 font-bold"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" fill="white" />
-                    Create Knowledge Base
-                  </>
-                )}
-              </Button>
+              {/* File List */}
+              {!isLoading && selectedIntegration && (
+                <div
+                  className="space-y-2 mt-4 overflow-auto"
+                  style={{
+                    maxHeight: `calc(100% - ${
+                      selectedFiles.size > 0 ? "260px" : "180px"
+                    })`,
+                  }}
+                >
+                  {/* Breadcrumb Navigation */}
+                  {currentPath.length > 0 && (
+                    <div className="flex items-center space-x-2 mb-4">
+                      <Button variant="ghost" size="sm" onClick={handleBack}>
+                        Back
+                      </Button>
+                      <div className="flex items-center">
+                        {currentPath.map((path, index) => (
+                          <div key={path} className="flex items-center">
+                            {index > 0 && (
+                              <ChevronRight className="w-4 h-4 mx-1" />
+                            )}
+                            <span>{path}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* File List - now using filteredFiles */}
+              {!isLoading && selectedIntegration && (
+                <div
+                  className="space-y-2 mt-4 overflow-auto"
+                  style={{
+                    maxHeight: `calc(100% - ${
+                      selectedFiles.size > 0 ? "320px" : "240px"
+                    })`,
+                  }}
+                >
+                  {/* Breadcrumb Navigation remains the same */}
+
+                  {/* No Results Message */}
+                  {filteredFiles.length === 0 && searchQuery && (
+                    <div className="text-center text-muted-foreground py-8">
+                      No files found matching &quot;{searchQuery}&quot;
+                    </div>
+                  )}
+
+                  {/* Files and Folders - now using filteredFiles */}
+                  <div className="space-y-2 text-sm">
+                    {filteredFiles.map((file) => (
+                      <div
+                        key={file.resource_id}
+                        className={`flex items-center p-2 rounded hover:bg-gray-100 cursor-pointer ${
+                          selectedFiles.has(file.resource_id)
+                            ? "bg-blue-50"
+                            : ""
+                        }`}
+                      >
+                        {/* Left side: Icon and Name - clickable for navigation */}
+                        <div
+                          className="flex items-center flex-1"
+                          onClick={() =>
+                            file.inode_type === "directory"
+                              ? handleFolderClick(file)
+                              : undefined
+                          }
+                        >
+                          {file.inode_type === "directory" ? (
+                            <FolderIcon className="w-5 h-5 text-blue-500 mr-2" />
+                          ) : (
+                            <FileIcon className="w-5 h-5 text-gray-500 mr-2" />
+                          )}
+                          <span className="flex-1">
+                            {highlightMatch(
+                              file.inode_path.path.split("/").pop() || "",
+                              searchQuery
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Right side: Actions */}
+                        <div className="flex items-center gap-2">
+                          {/* Show checkbox for both files and folders */}
+                          <input
+                            type="checkbox"
+                            checked={selectedFiles.has(file.resource_id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleFileSelect(file);
+                            }}
+                            className="ml-2"
+                          />
+                          {/* Optional: Add folder navigation button */}
+                          {file.inode_type === "directory" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="p-1 h-6 w-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFolderClick(file);
+                              }}
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="absolute bottom-0 right-0 p-4 bg-white border-t w-full flex justify-end space-x-2 ">
+                <Button variant="outline" onClick={() => setIsOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={selectedFiles.size === 0 || isLoading}
+                  onClick={handleCreateKnowledgeBase}
+                  className="rounded-lg shadow flex flex-row items-center gap-2 bg-violet-600 font-bold"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" fill="white" />
+                      Create Knowledge Base
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
