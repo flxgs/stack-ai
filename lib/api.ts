@@ -111,7 +111,7 @@ export const createApiClient = (): ApiClient => {
     if (!connectionId) throw new Error("No connection ID available");
 
     try {
-      const response = await fetchWithAuth("/knowledge-base", {
+      const response = await fetchWithAuth("/knowledge-bases", {
         method: "POST",
         body: JSON.stringify({
           connection_id: connectionId,
@@ -160,27 +160,37 @@ export const createApiClient = (): ApiClient => {
         resourceIds
       );
 
-      // First get the org ID
-      const orgResponse = await fetchWithAuth("/organizations/me/current");
-      const { org_id } = await orgResponse.json();
+      // First get the org ID if we don't have it
+      if (!orgId) {
+        const orgResponse = await fetchWithAuth("/organizations/me/current");
+        const data = await orgResponse.json();
+        orgId = data.org_id;
+      }
 
       // Then trigger the sync
       const response = await fetchWithAuth(
-        `/knowledge-base/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${org_id}`,
-        { method: "GET" }
+        `/knowledge-bases/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${orgId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
       );
 
       const data = await response.json();
 
-      // If we got a task ID, consider it successful
-      if (data.upsert_group_task_id) {
-        return {
-          ...data,
-          success: true,
-        };
+      if (!response.ok) {
+        const error = data.error || data.message || "Internal Server Error";
+        console.error("Sync error details:", data);
+        throw new Error(error);
       }
 
-      throw new Error(data.message || "Sync failed");
+      return {
+        ...data,
+        success: true,
+      };
     } catch (error) {
       console.error("Error syncing knowledge base:", error);
       throw error;
@@ -193,7 +203,7 @@ export const createApiClient = (): ApiClient => {
   ): Promise<KnowledgeBase> => {
     try {
       const response = await fetchWithAuth(
-        `/knowledge-base/${knowledgeBaseId}`,
+        `/knowledge-bases/${knowledgeBaseId}`,
         {
           method: "PATCH",
           body: JSON.stringify({
@@ -211,23 +221,10 @@ export const createApiClient = (): ApiClient => {
     }
   };
 
-  const getKnowledgeBaseStatus = async (knowledgeBaseId: string) => {
-    try {
-      const response = await fetchWithAuth(
-        `/knowledge-base/${knowledgeBaseId}`
-      );
-      return response.json();
-    } catch (error) {
-      throw new Error(
-        `Failed to get knowledge base status: ${(error as Error).message}`
-      );
-    }
-  };
-
   const listKnowledgeBases = async (): Promise<KnowledgeBaseResponse> => {
     try {
       console.log("Fetching knowledge bases...");
-      const response = await fetchWithAuth("/knowledge-base");
+      const response = await fetchWithAuth("/knowledge-bases");
       const data = await response.json();
       console.log("Raw KB response:", data);
 
@@ -252,7 +249,7 @@ export const createApiClient = (): ApiClient => {
   ): Promise<FileNode[]> => {
     const queryParams = new URLSearchParams({ resource_path: resourcePath });
     const response = await fetchWithAuth(
-      `/knowledge-base/${knowledgeBaseId}/resources/children?${queryParams}`
+      `/knowledge-bases/${knowledgeBaseId}/resources/children?${queryParams}`
     );
     return response.json();
   };
