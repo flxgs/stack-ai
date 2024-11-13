@@ -3,93 +3,64 @@ import { headers } from "next/headers";
 
 const BASE_URL = "https://api.stack-ai.com";
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { knowledgeBaseId: string; orgId: string } }
+) {
   try {
     const headersList = await headers();
     const authHeader = headersList.get("authorization");
+    const { knowledgeBaseId, orgId } = params;
 
-    const { searchParams } = new URL(request.url);
-    const knowledgeBaseId = searchParams.get("knowledgeBaseId");
-    const orgId = searchParams.get("orgId");
+    console.log("[Sync Route] Request params:", { knowledgeBaseId, orgId });
 
-    console.log("Received sync request:", {
-      knowledgeBaseId,
-      orgId,
-      hasAuth: !!authHeader,
-    });
-
-    if (!knowledgeBaseId || !orgId) {
-      return NextResponse.json(
-        { error: "knowledgeBaseId and orgId are required" },
-        { status: 400 }
-      );
-    }
-
-    // Construct the Stack AI URL
+    // Using exact URL structure from notebook
     const stackAiUrl = `${BASE_URL}/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`;
 
-    console.log("Making request to Stack AI:", {
-      url: stackAiUrl,
-      method: "GET",
-      headers: {
-        Authorization: authHeader ? "Bearer [redacted]" : "missing",
-        "Content-Type": "application/json",
-      },
-    });
+    console.log("[Sync Route] Stack AI URL:", stackAiUrl);
 
     const response = await fetch(stackAiUrl, {
       method: "GET",
       headers: {
         Authorization: authHeader || "",
-        "Content-Type": "application/json",
       },
     });
 
     const responseText = await response.text();
-
-    console.log("Stack AI Response:", {
+    console.log("[Sync Route] Stack AI Response:", {
       status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers),
       body: responseText,
     });
 
-    // Try to parse JSON response
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error("Failed to parse Stack AI response:", e);
-      return NextResponse.json(
-        {
-          error: "Invalid response from Stack AI",
-          details: responseText,
-        },
-        { status: 500 }
-      );
-    }
-
     if (!response.ok) {
-      console.error("Stack AI error response:", data);
       return NextResponse.json(
         {
-          error: data.message || "Failed to sync knowledge base",
-          details: data,
+          error: "Stack AI returned an error",
+          details: responseText,
         },
         { status: response.status }
       );
     }
 
-    const result = {
-      success: true,
-      upsert_group_task_id: data.upsert_group_task_id,
-      ...data,
-    };
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error: "Invalid JSON response from Stack AI",
+          raw_response: responseText,
+        },
+        { status: 500 }
+      );
+    }
 
-    console.log("Sending successful response:", result);
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      ...data,
+    });
   } catch (error) {
-    console.error("Unexpected error in sync route:", error);
+    console.error("[Sync Route] Unexpected error:", error);
     return NextResponse.json(
       {
         error: "Failed to sync knowledge base",
@@ -141,6 +112,90 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
+        error: "Failed to sync knowledge base",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  // Changed to POST
+  try {
+    const headersList = await headers();
+    const authHeader = headersList.get("authorization");
+
+    const body = await request.json();
+    const { knowledgeBaseId, orgId, resourceIds } = body;
+
+    console.log("[Sync Route] Request data:", {
+      knowledgeBaseId,
+      orgId,
+      resourceIds,
+    });
+
+    if (!knowledgeBaseId || !orgId || !resourceIds) {
+      return NextResponse.json(
+        { error: "knowledgeBaseId, orgId, and resourceIds are required" },
+        { status: 400 }
+      );
+    }
+
+    // Using the notebook's endpoint structure
+    const stackAiUrl = `${BASE_URL}/knowledge_bases/${knowledgeBaseId}/sync`;
+
+    console.log("[Sync Route] Stack AI URL:", stackAiUrl);
+
+    const response = await fetch(stackAiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader || "",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        org_id: orgId,
+        resource_ids: resourceIds,
+      }),
+    });
+
+    const responseText = await response.text();
+    console.log("[Sync Route] Stack AI Response:", {
+      status: response.status,
+      body: responseText,
+    });
+
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          error: "Stack AI returned an error",
+          details: responseText,
+        },
+        { status: response.status }
+      );
+    }
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error: "Invalid JSON response from Stack AI",
+          raw_response: responseText,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      ...data,
+    });
+  } catch (error) {
+    console.error("[Sync Route] Unexpected error:", error);
+    return NextResponse.json(
+      {
         error: "Failed to sync knowledge base",
         details: error instanceof Error ? error.message : String(error),
       },

@@ -90,7 +90,9 @@ export interface SyncResponse {
   status?: number;
   message?: string;
   success?: boolean;
-  upsert_group_task_id: string;
+  upsert_group_task_id?: string;
+  error?: string;
+  data?: any;
 }
 
 // Create Knowledge Base params

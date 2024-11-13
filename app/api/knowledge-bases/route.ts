@@ -18,48 +18,88 @@ const BASE_URL = "https://api.stack-ai.com";
  */
 export async function POST(request: NextRequest) {
   try {
-    // Get headers asynchronously
     const headersList = await headers();
     const authHeader = headersList.get("authorization");
 
-    // Parse the request body
     const body = await request.json();
+    const {
+      connection_id,
+      connection_source_ids,
+      indexing_params = {
+        ocr: false,
+        unstructured: true,
+        embedding_params: {
+          embedding_model: "text-embedding-ada-002",
+          api_key: null,
+        },
+        chunker_params: {
+          chunk_size: 1500,
+          chunk_overlap: 500,
+          chunker: "sentence",
+        },
+      },
+    } = body;
 
-    // Validate required fields
-    if (!body.connection_id || !body.connection_source_ids) {
-      return NextResponse.json(
-        { error: "connection_id and connection_source_ids are required" },
-        { status: 400 }
-      );
-    }
+    console.log("[KB Create Route] Request:", {
+      connection_id,
+      connection_source_ids,
+      indexing_params,
+    });
 
-    // Make request to Stack AI API
-    const response = await fetch(`${BASE_URL}/knowledge_bases`, {
+    const stackAiUrl = `${BASE_URL}/knowledge_bases`;
+
+    const response = await fetch(stackAiUrl, {
       method: "POST",
       headers: {
         Authorization: authHeader || "",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        connection_id,
+        connection_source_ids,
+        indexing_params,
+        org_level_role: null,
+        cron_job_id: null,
+      }),
+    });
+
+    const responseText = await response.text();
+    console.log("[KB Create Route] Stack AI Response:", {
+      status: response.status,
+      body: responseText,
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
       return NextResponse.json(
         {
-          error: "Failed to create knowledge base",
-          details: errorData,
+          error: "Stack AI returned an error",
+          details: responseText,
         },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error: "Invalid JSON response from Stack AI",
+          raw_response: responseText,
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error in knowledge-base creation:", error);
+    console.error("[KB Create Route] Unexpected error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Failed to create knowledge base",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

@@ -11,8 +11,8 @@ export interface ApiClient {
   login(email: string, password: string): Promise<void>;
   listFiles(parentId?: string): Promise<FileNode[]>;
   listKnowledgeBases(): Promise<KnowledgeBaseResponse>;
-  createKnowledgeBase(fileIds: string[]): Promise<KnowledgeBase>;
-  syncKnowledgeBase(kbId: string, resourceIds: string[]): Promise<SyncResponse>; // Updated signature
+  createKnowledgeBase(fileIds: string[]): Promise<KnowledgeBase>; // Keep original signature
+  syncKnowledgeBase(kbId: string, resourceIds: string[]): Promise<SyncResponse>;
   getKnowledgeBaseResources(
     knowledgeBaseId: string,
     resourcePath?: string
@@ -106,16 +106,21 @@ export const createApiClient = (): ApiClient => {
   };
 
   const createKnowledgeBase = async (
-    resourceIds: string[]
+    fileIds: string[]
   ): Promise<KnowledgeBase> => {
-    if (!connectionId) throw new Error("No connection ID available");
-
     try {
-      const response = await fetchWithAuth("/knowledge-bases", {
+      if (!connectionId) {
+        throw new Error("No connection ID available");
+      }
+
+      const response = await fetchWithAuth(`/knowledge-bases`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           connection_id: connectionId,
-          connection_source_ids: resourceIds,
+          connection_source_ids: fileIds,
           indexing_params: {
             ocr: false,
             unstructured: true,
@@ -129,15 +134,15 @@ export const createApiClient = (): ApiClient => {
               chunker: "sentence",
             },
           },
-          org_level_role: null,
-          cron_job_id: null,
         }),
       });
 
       const data = await response.json();
 
-      if (!data.knowledge_base_id) {
-        throw new Error("Knowledge base creation failed: No ID returned");
+      if (!response.ok) {
+        throw new Error(
+          data.error || data.message || "Failed to create knowledge base"
+        );
       }
 
       return data;
@@ -153,47 +158,63 @@ export const createApiClient = (): ApiClient => {
     resourceIds: string[]
   ): Promise<SyncResponse> => {
     try {
-      console.log(
-        "Syncing KB:",
+      console.log("[Client] Starting sync:", {
         knowledgeBaseId,
-        "with resources:",
-        resourceIds
-      );
+        resourceIds,
+      });
 
-      // First get the org ID if we don't have it
       if (!orgId) {
         const orgResponse = await fetchWithAuth("/organizations/me/current");
         const data = await orgResponse.json();
         orgId = data.org_id;
       }
 
-      // Then trigger the sync
+      // Trigger the sync
       const response = await fetchWithAuth(
-        `/knowledge-bases/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${orgId}`,
+        `/knowledge-bases/sync/trigger/${knowledgeBaseId}/${orgId}`,
         {
           method: "GET",
           headers: {
             Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
           },
         }
       );
 
-      const data = await response.json();
+      const responseData = await response.json();
 
       if (!response.ok) {
-        const error = data.error || data.message || "Internal Server Error";
-        console.error("Sync error details:", data);
-        throw new Error(error);
+        throw new Error(
+          responseData.error || responseData.message || "Internal Server Error"
+        );
+      }
+
+      // Parse the data string if it's a string
+      let parsedData;
+      if (typeof responseData.data === "string") {
+        try {
+          parsedData = JSON.parse(responseData.data);
+        } catch (e) {
+          console.warn(
+            "Could not parse sync response data:",
+            responseData.data
+          );
+          parsedData = responseData.data;
+        }
+      } else {
+        parsedData = responseData.data;
       }
 
       return {
-        ...data,
         success: true,
+        upsert_group_task_id: parsedData?.upsert_group_task_id,
       };
     } catch (error) {
-      console.error("Error syncing knowledge base:", error);
-      throw error;
+      console.error("[Client] Sync error:", error);
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      };
     }
   };
 
