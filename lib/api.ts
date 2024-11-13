@@ -10,7 +10,7 @@ import {
 export interface ApiClient {
   login(email: string, password: string): Promise<void>;
   listFiles(parentId?: string): Promise<FileNode[]>;
-  listKnowledgeBases(): Promise<KnowledgeBaseList[]>;
+  listKnowledgeBases(): Promise<KnowledgeBaseResponse>;
   createKnowledgeBase(fileIds: string[]): Promise<KnowledgeBase>;
   syncKnowledgeBase(kbId: string): Promise<SyncResponse>;
   getKnowledgeBaseResources(
@@ -200,11 +200,22 @@ export const createApiClient = (): ApiClient => {
     }
   };
 
-  const listKnowledgeBases = async (): Promise<KnowledgeBaseList[]> => {
+  const listKnowledgeBases = async (): Promise<KnowledgeBaseResponse> => {
     try {
+      console.log("Fetching knowledge bases...");
       const response = await fetchWithAuth("/knowledge-base");
-      return response.json();
+      const data = await response.json();
+      console.log("Raw KB response:", data);
+
+      // Transform the data if needed
+      const transformedData: KnowledgeBaseResponse = {
+        admin: Array.isArray(data.admin) ? data.admin : [],
+      };
+
+      console.log("Transformed KB data:", transformedData);
+      return transformedData;
     } catch (error) {
+      console.error("Error fetching knowledge bases:", error);
       throw new Error(
         `Failed to fetch knowledge bases: ${(error as Error).message}`
       );

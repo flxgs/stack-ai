@@ -2,6 +2,25 @@
 export type Status = "pending" | "indexed" | "failed";
 export type SortOption = "name_asc" | "name_desc" | "date_asc" | "date_desc";
 
+export type SelectedKB = {
+  id: string;
+  name: string;
+  files: string[];
+};
+
+export interface KnowledgeBasesProps {
+  onKnowledgeBaseSelect: (kb: KnowledgeBaseList) => void;
+  onRefresh: () => Promise<void>;
+  knowledgeBases: KnowledgeBaseList[];
+  isLoading: boolean;
+}
+
+export interface FilePickerDialogProps {
+  knowledgeBaseId?: string;
+  existingFiles?: string[];
+  onClose?: () => void;
+}
+
 // File/Resource related types
 export interface FileNode {
   resource_id: string;
@@ -23,7 +42,7 @@ export interface KnowledgeBaseResponse {
 // Knowledge Base related types
 export interface KnowledgeBaseBase {
   knowledge_base_id: string;
-  connection_id: string;
+  connection_id: string | null; // Changed to allow null
   name: string;
   description: string;
   created_at: string;
@@ -33,6 +52,7 @@ export interface KnowledgeBaseBase {
   org_id: string;
   org_level_role: string | null;
   cron_job_id: string | null;
+  indexing_params: KnowledgeBase["indexing_params"]; // Add this to include indexing_params
 }
 
 export interface KnowledgeBase extends KnowledgeBaseBase {
@@ -40,19 +60,22 @@ export interface KnowledgeBase extends KnowledgeBaseBase {
     ocr: boolean;
     unstructured: boolean;
     embedding_params: {
+      api: null;
+      base_url: null;
       embedding_model: string;
-      api_key: null;
+      batch_size: number;
+      track_usage: boolean;
+      timeout: number;
     };
     chunker_params: {
       chunk_size: number;
       chunk_overlap: number;
-      chunker: string;
+      chunker_type: string; // Changed from 'chunker' to 'chunker_type'
     };
   };
 }
 
-export interface KnowledgeBaseList
-  extends Omit<KnowledgeBaseBase, "indexing_params"> {
+export interface KnowledgeBaseList extends KnowledgeBase {
   status?: Status;
 }
 
@@ -112,20 +135,5 @@ export interface PaginatedResponse<T> {
   per_page: number;
   total_pages: number;
 }
-
-// Default params
-export const DEFAULT_INDEXING_PARAMS: KnowledgeBase["indexing_params"] = {
-  ocr: false,
-  unstructured: true,
-  embedding_params: {
-    embedding_model: "text-embedding-ada-002",
-    api_key: null,
-  },
-  chunker_params: {
-    chunk_size: 1500,
-    chunk_overlap: 500,
-    chunker: "sentence",
-  },
-};
 
 export type StatusVariant = "default" | "secondary" | "destructive";

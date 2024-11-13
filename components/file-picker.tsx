@@ -13,6 +13,7 @@ import { useApi } from "@/lib/api-context";
 import {
   FileNode,
   KnowledgeBaseList,
+  KnowledgeBaseResponse,
   SortOption,
   StatusVariant,
 } from "@/types/api";
@@ -118,53 +119,11 @@ export default function FilePickerDialog() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOption, setSortOption] = useState<SortOption>("name_asc");
   const [showKBView, setShowKBView] = useState(false);
-  const [kbs, setKbs] = useState<KnowledgeBaseList[]>([]);
+  const [kbs, setKbs] = useState<KnowledgeBaseResponse>({ admin: [] });
   const [viewingKB, setViewingKB] = useState<string | null>(null);
   const [selectedKnowledgeBase, setSelectedKnowledgeBase] =
     useState<KnowledgeBaseList | null>(null);
-
-  const loadKnowledgeBases = async () => {
-    try {
-      setIsLoading(true);
-      const knowledgeBases = await api.listKnowledgeBases();
-      setKbs(knowledgeBases);
-
-      // Set the first knowledge base as default if available
-      if (knowledgeBases.length > 0) {
-        setSelectedKnowledgeBase(knowledgeBases[0]);
-        // Load files for the selected knowledge base
-        await loadKnowledgeBaseFiles(knowledgeBases[0].knowledge_base_id);
-      }
-    } catch (error) {
-      console.error("Error loading knowledge bases:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Could not load knowledge bases",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Load files for a specific knowledge base
-  const loadKnowledgeBaseFiles = async (kbId: string) => {
-    try {
-      setIsLoading(true);
-      const resources = await api.getKnowledgeBaseResources(kbId);
-      setFiles(Array.isArray(resources) ? resources : []);
-      setCurrentPath([]);
-    } catch (error) {
-      console.error("Error loading knowledge base files:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Could not load knowledge base files",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [selectedKB, setSelectedKB] = useState<KnowledgeBaseList | null>(null);
 
   // Sort files based on sort option
   const sortFiles = (files: FileNode[]) => {
@@ -250,15 +209,29 @@ export default function FilePickerDialog() {
 
   // Handle integration selection
   const handleIntegrationSelect = async (integrationId: string) => {
-    setSelectedIntegration(integrationId);
-    setError(null);
-
     if (integrationId === "google-drive") {
       try {
         setIsLoading(true);
         await authenticate();
-        await loadKnowledgeBases(); // This will also load files for the default KB
+        const fileList = await api.listFiles();
+        setFiles(fileList);
+
+        // Load existing KBs
+        console.log("Fetching KBs in handleIntegrationSelect...");
+        const knowledgeBases = await api.listKnowledgeBases();
+        console.log("Received KBs:", knowledgeBases);
+        setKbs(knowledgeBases);
+        // Select the newest KB by default
+        if (knowledgeBases.admin.length > 0) {
+          const sortedKBs = [...knowledgeBases.admin].sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+          );
+          setSelectedKB(sortedKBs[0]);
+        }
       } catch (error) {
+        console.error("Error in handleIntegrationSelect:", error);
         setError("Failed to load content");
         toast({
           variant: "destructive",
@@ -269,69 +242,6 @@ export default function FilePickerDialog() {
         setIsLoading(false);
       }
     }
-  };
-
-  const KnowledgeBaseSelector = () => {
-    if (!isAuthenticated || kbs.length === 0) return null;
-
-    return (
-      <div className="flex items-center gap-4 mb-4">
-        <Select
-          value={selectedKnowledgeBase?.knowledge_base_id}
-          onValueChange={async (value) => {
-            const kb = kbs.find((kb) => kb.knowledge_base_id === value);
-            if (kb) {
-              setSelectedKnowledgeBase(kb);
-              await loadKnowledgeBaseFiles(kb.knowledge_base_id);
-            }
-          }}
-        >
-          <SelectTrigger className="w-[300px]">
-            <SelectValue placeholder="Select Knowledge Base">
-              {selectedKnowledgeBase?.name || "Select Knowledge Base"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {Array.isArray(kbs) && kbs.length > 0 ? (
-              kbs.map((kb) => (
-                <SelectItem
-                  key={kb.knowledge_base_id}
-                  value={kb.knowledge_base_id}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <span>{kb.name || "Unnamed Knowledge Base"}</span>
-                    <Badge
-                      variant={kb.is_empty ? "secondary" : "default"}
-                      className="ml-2"
-                    >
-                      {kb.is_empty
-                        ? "Empty"
-                        : `${kb.connection_source_ids.length} files`}
-                    </Badge>
-                  </div>
-                </SelectItem>
-              ))
-            ) : (
-              <SelectItem value="no-kbs">
-                <div className="text-center text-muted-foreground py-4">
-                  No knowledge bases available
-                </div>
-              </SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowKBView(true)}
-          className="flex items-center gap-2"
-        >
-          <Database className="w-4 h-4" />
-          Manage Knowledge Bases
-        </Button>
-      </div>
-    );
   };
 
   // Handle folder navigation
@@ -431,7 +341,9 @@ export default function FilePickerDialog() {
     if (!isAuthenticated) return;
     try {
       const knowledgeBases = await api.listKnowledgeBases();
-      setKbs(Array.isArray(knowledgeBases) ? knowledgeBases : []);
+      setKbs({
+        admin: Array.isArray(knowledgeBases) ? knowledgeBases : [],
+      });
     } catch (error) {
       toast({
         variant: "destructive",
@@ -485,7 +397,7 @@ export default function FilePickerDialog() {
       setError(null);
       setShowKBView(false);
       setViewingKB(null);
-      setKbs([]);
+      setKbs({ admin: [] });
     }
     setIsOpen(open);
   };
@@ -584,7 +496,7 @@ export default function FilePickerDialog() {
               </button>
             ))}
             {isAuthenticated && (
-              <div className="border-t pt-4">
+              <div className="border-t pt-4 space-y-2">
                 <Button
                   variant="outline"
                   className="w-full flex items-center justify-between"
@@ -594,12 +506,24 @@ export default function FilePickerDialog() {
                     <Database className="w-4 h-4 mr-2" />
                     Knowledge Bases
                   </span>
-                  <Badge variant="secondary">{kbs?.length || 0}</Badge>
+                  <Badge variant="secondary">{kbs.admin.length || 0}</Badge>
                 </Button>
+
+                {selectedKB && (
+                  <div className="px-2 py-1 text-sm">
+                    <div className="font-medium text-muted-foreground">
+                      Selected KB:
+                    </div>
+                    <div className="truncate text-primary">
+                      {selectedKB.name}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
+          {/* In the main content area */}
           {showKBView ? (
             <div className="flex-1 p-4 relative">
               <DialogHeader>
@@ -613,41 +537,12 @@ export default function FilePickerDialog() {
                     Back to Files
                   </Button>
                 </div>
-                <DialogDescription>
-                  Your indexed documents and knowledge bases
-                </DialogDescription>
               </DialogHeader>
-
-              {/* KB List */}
-              <div className="mt-4">
-                {kbs?.map((kb) => (
-                  <div
-                    key={kb.knowledge_base_id}
-                    className="flex items-center justify-between p-4 border rounded-lg mb-2"
-                  >
-                    <div>
-                      <h3 className="font-medium">
-                        {kb.name || "Unnamed Knowledge Base"}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {kb.connection_source_ids.length} files
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={getStatusVariant(kb.status)}>
-                        {kb.status || "Unknown"}
-                      </Badge>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => viewKBContents(kb.knowledge_base_id)}
-                      >
-                        View Files
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <KnowledgeBasesList
+                knowledgeBases={kbs}
+                selectedKB={selectedKB}
+                onSelect={setSelectedKB}
+              />{" "}
             </div>
           ) : (
             /* Main Content */
@@ -658,7 +553,7 @@ export default function FilePickerDialog() {
                   {selectedFiles.size > 0 && (
                     <Badge
                       variant="secondary"
-                      className="mr-16 text-md bg-blue-600 text-white"
+                      className="mr-16 text-sm bg-blue-600 text-white"
                     >
                       {selectedFiles.size} file
                       {selectedFiles.size !== 1 ? "s" : ""} selected
@@ -669,8 +564,6 @@ export default function FilePickerDialog() {
                   Choose files to include in your knowledge base
                 </DialogDescription>
               </DialogHeader>
-
-              {!showKBView && <KnowledgeBaseSelector />}
 
               {/* Selected Files Display */}
               {selectedFiles.size > 0 && (
