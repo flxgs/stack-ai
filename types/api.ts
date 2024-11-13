@@ -87,9 +87,10 @@ export interface ApiError {
 }
 
 export interface SyncResponse {
-  status: number;
+  status?: number;
   message?: string;
   success?: boolean;
+  upsert_group_task_id: string;
 }
 
 // Create Knowledge Base params

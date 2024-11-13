@@ -1,4 +1,3 @@
-// src/app/api/knowledge-base/sync/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 
@@ -20,11 +19,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(
-      "Syncing KB:",
-      `${BASE_URL}/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`
-    );
-
     const response = await fetch(
       `${BASE_URL}/knowledge_bases/sync/trigger/${knowledgeBaseId}/${orgId}`,
       {
@@ -35,7 +29,6 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    // Get response as text first
     const responseText = await response.text();
     console.log("Sync response:", response.status, responseText);
 
@@ -48,7 +41,56 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error in sync route:", error);
     return NextResponse.json(
-      { error: "Internal server error", details: (error as Error).message },
+      { error: "Failed to sync knowledge base" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const headersList = await headers();
+    const authHeader = headersList.get("authorization");
+    const body = await request.json();
+    const { knowledge_base_id, resource_ids } = body;
+
+    console.log("Syncing KB with resources:", {
+      knowledge_base_id,
+      resource_ids,
+      url: `${BASE_URL}/knowledge_bases/sync/trigger/${knowledge_base_id}`,
+    });
+
+    const response = await fetch(
+      `${BASE_URL}/knowledge_bases/sync/trigger/${knowledge_base_id}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: authHeader || "",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resource_ids,
+        }),
+      }
+    );
+
+    const responseText = await response.text();
+    console.log("Sync response:", response.status, responseText);
+
+    return new Response(responseText, {
+      status: response.status,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    console.error("Error in sync route:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to sync knowledge base",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

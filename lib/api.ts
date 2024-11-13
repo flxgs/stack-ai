@@ -12,7 +12,7 @@ export interface ApiClient {
   listFiles(parentId?: string): Promise<FileNode[]>;
   listKnowledgeBases(): Promise<KnowledgeBaseResponse>;
   createKnowledgeBase(fileIds: string[]): Promise<KnowledgeBase>;
-  syncKnowledgeBase(kbId: string): Promise<SyncResponse>;
+  syncKnowledgeBase(kbId: string, resourceIds: string[]): Promise<SyncResponse>; // Updated signature
   getKnowledgeBaseResources(
     knowledgeBaseId: string,
     resourcePath?: string
@@ -149,45 +149,41 @@ export const createApiClient = (): ApiClient => {
   };
 
   const syncKnowledgeBase = async (
-    knowledgeBaseId: string
+    knowledgeBaseId: string,
+    resourceIds: string[]
   ): Promise<SyncResponse> => {
-    if (!orgId) throw new Error("No organization ID available");
-
     try {
-      const response = await fetchWithAuth(
-        `/knowledge-base/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${orgId}`,
-        {
-          headers: {
-            Accept: "application/json",
-          },
-        }
+      console.log(
+        "Syncing KB:",
+        knowledgeBaseId,
+        "with resources:",
+        resourceIds
       );
 
-      let message = "";
-      try {
-        const text = await response.text();
-        message = text;
-        // Try to parse as JSON if possible
-        try {
-          const json = JSON.parse(text);
-          message = json.message || json.error || text;
-        } catch {
-          // If not JSON, use text as is
-        }
-      } catch (e) {
-        message = "No response content";
+      // First get the org ID
+      const orgResponse = await fetchWithAuth("/organizations/me/current");
+      const { org_id } = await orgResponse.json();
+
+      // Then trigger the sync
+      const response = await fetchWithAuth(
+        `/knowledge-base/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${org_id}`,
+        { method: "GET" }
+      );
+
+      const data = await response.json();
+
+      // If we got a task ID, consider it successful
+      if (data.upsert_group_task_id) {
+        return {
+          ...data,
+          success: true,
+        };
       }
 
-      return {
-        status: response.status,
-        message,
-        success: response.status >= 200 && response.status < 300,
-      };
+      throw new Error(data.message || "Sync failed");
     } catch (error) {
-      console.error("Sync error:", error);
-      throw new Error(
-        `Failed to sync knowledge base: ${(error as Error).message}`
-      );
+      console.error("Error syncing knowledge base:", error);
+      throw error;
     }
   };
 

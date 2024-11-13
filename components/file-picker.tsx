@@ -366,10 +366,14 @@ export default function FilePickerDialog() {
       const kb = await api.createKnowledgeBase(Array.from(selectedFiles));
       console.log("Knowledge base created:", kb);
 
-      const syncResult = await api.syncKnowledgeBase(kb.knowledge_base_id);
+      const syncResult = await api.syncKnowledgeBase(
+        kb.knowledge_base_id,
+        Array.from(selectedFiles)
+      );
       console.log("Sync result:", syncResult);
 
-      if (syncResult.success) {
+      // If we got a task ID, the sync was initiated successfully
+      if (syncResult.upsert_group_task_id) {
         toast({
           title: "Success",
           description: "Knowledge base created and sync started successfully.",
@@ -469,18 +473,24 @@ export default function FilePickerDialog() {
       setIsLoading(true);
       setError(null);
 
-      // First update the KB with new files
-      const updatedKB = await api.updateKnowledgeBase(
+      console.log("Starting sync with files:", Array.from(selectedFiles));
+
+      const syncResult = await api.syncKnowledgeBase(
         selectedKB.knowledge_base_id,
         Array.from(selectedFiles)
       );
-      console.log("Knowledge base updated:", updatedKB);
 
-      // Then trigger a sync
-      const syncResult = await api.syncKnowledgeBase(
-        selectedKB.knowledge_base_id
-      );
       console.log("Sync result:", syncResult);
+
+      if (syncResult.success) {
+        toast({
+          title: "Success",
+          description: "Knowledge base sync started successfully",
+        });
+        setIsOpen(false);
+      } else {
+        throw new Error(syncResult.message || "Sync failed");
+      }
 
       if (syncResult.success) {
         toast({
