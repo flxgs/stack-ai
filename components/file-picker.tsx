@@ -469,7 +469,7 @@ export default function FilePickerDialog() {
                 {/* No Results Message */}
                 {filteredFiles.length === 0 && searchQuery && (
                   <div className="text-center text-muted-foreground py-8">
-                    No files found matching "{searchQuery}"
+                    No files found matching &quot;{searchQuery}&quot;
                   </div>
                 )}
 
