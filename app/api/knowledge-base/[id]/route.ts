@@ -16,82 +16,20 @@ interface KnowledgeBaseResource {
 }
 
 /**
- * GET handler for knowledge base details and resources
- * Retrieves information about a specific knowledge base and its contents
+ * GET handler to list all knowledge bases
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest) {
   try {
-    const { id } = await params;
     const headersList = await headers();
     const authHeader = headersList.get("authorization");
-    const { searchParams } = new URL(request.url);
 
-    // Get resource path from query params (for listing specific folders)
-    const resourcePath = searchParams.get("resourcePath") || "/";
-
-    const url = `${BASE_URL}/knowledge_bases/${id}/resources/children?resource_path=${encodeURIComponent(
-      resourcePath
-    )}`;
-
-    const response = await fetch(url, {
-      headers: {
-        Authorization: authHeader || "",
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "Failed to fetch knowledge base resources" },
-        { status: response.status }
-      );
+    if (!authHeader) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error("Error fetching knowledge base resources:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * DELETE handler for removing resources from knowledge base
- * Note: This doesn't delete the file from Google Drive
- */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const headersList = await headers();
-    const authHeader = headersList.get("authorization");
-    const { searchParams } = new URL(request.url);
-    const resourcePath = searchParams.get("resourcePath");
-
-    // Validate required parameters
-    if (!resourcePath) {
-      return NextResponse.json(
-        { error: "Resource path is required" },
-        { status: 400 }
-      );
-    }
-
-    const url = `${BASE_URL}/knowledge_bases/${id}/resources?resource_path=${encodeURIComponent(
-      resourcePath
-    )}`;
-
-    const response = await fetch(url, {
-      method: "DELETE",
+    const response = await fetch(`${BASE_URL}/knowledge_bases`, {
       headers: {
-        Authorization: authHeader || "",
+        Authorization: authHeader,
         "Content-Type": "application/json",
       },
     });
@@ -100,19 +38,64 @@ export async function DELETE(
       const errorData = await response.json().catch(() => null);
       return NextResponse.json(
         {
-          error: "Failed to delete resource from knowledge base",
+          error: "Failed to fetch knowledge bases",
           details: errorData,
         },
         { status: response.status }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Successfully removed ${resourcePath} from knowledge base`,
-    });
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Error deleting resource from knowledge base:", error);
+    console.error("Error fetching knowledge bases:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST handler for creating a new knowledge base
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const headersList = await headers();
+    const authHeader = headersList.get("authorization");
+    const body = await request.json();
+
+    if (!body.connection_id || !body.connection_source_ids) {
+      return NextResponse.json(
+        { error: "connection_id and connection_source_ids are required" },
+        { status: 400 }
+      );
+    }
+
+    const response = await fetch(`${BASE_URL}/knowledge_bases`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader || "",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      return NextResponse.json(
+        {
+          error: "Failed to create knowledge base",
+          details: errorData,
+        },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error creating knowledge base:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

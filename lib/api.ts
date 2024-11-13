@@ -1,5 +1,10 @@
 // src/lib/api-client.ts
-import { FileNode, KnowledgeBase, SyncResponse } from "@/types/api";
+import {
+  FileNode,
+  KnowledgeBase,
+  KnowledgeBaseList,
+  SyncResponse,
+} from "@/types/api";
 
 interface ApiClient {
   login(email: string, password: string): Promise<void>;
@@ -7,6 +12,7 @@ interface ApiClient {
   createKnowledgeBase(resourceIds: string[]): Promise<KnowledgeBase>;
   syncKnowledgeBase(knowledgeBaseId: string): Promise<SyncResponse>;
   getKnowledgeBaseStatus(knowledgeBaseId: string): Promise<any>;
+  listKnowledgeBases(): Promise<KnowledgeBaseList[]>;
 }
 
 export const createApiClient = (): ApiClient => {
@@ -190,12 +196,24 @@ export const createApiClient = (): ApiClient => {
     }
   };
 
+  const listKnowledgeBases = async (): Promise<KnowledgeBaseList[]> => {
+    try {
+      const response = await fetchWithAuth("/knowledge-base");
+      return response.json();
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch knowledge bases: ${(error as Error).message}`
+      );
+    }
+  };
+
   return {
     login,
     listFiles,
     createKnowledgeBase,
     syncKnowledgeBase,
     getKnowledgeBaseStatus,
+    listKnowledgeBases,
   };
 };
 

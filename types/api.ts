@@ -27,4 +27,15 @@ export interface SyncResponse {
   success?: boolean;
 }
 
+export interface KnowledgeBaseList {
+  knowledge_base_id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  connection_source_ids: string[];
+  is_empty: boolean;
+  status?: "pending" | "indexed" | "failed";
+}
+
 export type SortOption = "name_asc" | "name_desc" | "date_asc" | "date_desc";

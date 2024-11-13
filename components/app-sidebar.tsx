@@ -14,6 +14,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import FilePickerDialog from "./file-picker";
+import KnowledgeBasesList from "./knowledge-bases-list";
 
 // This is sample data.
 const data = {
@@ -180,6 +181,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <SidebarMenu className="gap-2">
             <FilePickerDialog />
+            <KnowledgeBasesList />
 
             {data.navMain.map((item) => (
               <SidebarMenuItem key={item.title}>
