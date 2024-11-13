@@ -221,6 +221,7 @@ export default function FilePickerDialog() {
         const knowledgeBases = await api.listKnowledgeBases();
         console.log("Received KBs:", knowledgeBases);
         setKbs(knowledgeBases);
+
         // Select the newest KB by default
         if (knowledgeBases.admin.length > 0) {
           const sortedKBs = [...knowledgeBases.admin].sort(
@@ -458,6 +459,48 @@ export default function FilePickerDialog() {
     }
   };
 
+  const handleSyncFiles = async () => {
+    if (!selectedKB) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // First update the KB with new files
+      const updatedKB = await api.updateKnowledgeBase(
+        selectedKB.knowledge_base_id,
+        Array.from(selectedFiles)
+      );
+      console.log("Knowledge base updated:", updatedKB);
+
+      // Then trigger a sync
+      const syncResult = await api.syncKnowledgeBase(
+        selectedKB.knowledge_base_id
+      );
+      console.log("Sync result:", syncResult);
+
+      if (syncResult.success) {
+        toast({
+          title: "Success",
+          description: "Files synced to knowledge base successfully.",
+        });
+        await refreshKBs();
+        setIsOpen(false);
+      } else {
+        throw new Error(`Sync failed: ${syncResult.message}`);
+      }
+    } catch (err) {
+      console.error("Error:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err instanceof Error ? err.message : "An error occurred",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogTrigger asChild>
@@ -510,14 +553,25 @@ export default function FilePickerDialog() {
                 </Button>
 
                 {selectedKB && (
-                  <div className="px-2 py-1 text-sm">
-                    <div className="font-medium text-muted-foreground">
-                      Selected KB:
+                  <>
+                    <div className="px-2 py-1 text-sm">
+                      <div className="font-medium text-muted-foreground">
+                        Current KB:
+                      </div>
+                      <div className="truncate text-primary">
+                        {selectedKB.name}
+                      </div>
                     </div>
-                    <div className="truncate text-primary">
-                      {selectedKB.name}
-                    </div>
-                  </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-muted-foreground hover:text-primary"
+                      onClick={() => setSelectedKB(null)}
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Create New KB
+                    </Button>
+                  </>
                 )}
               </div>
             )}
@@ -788,24 +842,26 @@ export default function FilePickerDialog() {
               )}
 
               {/* Action Buttons */}
-              <div className="absolute bottom-0 right-0 p-4 bg-white border-t w-full flex justify-end space-x-2 ">
+              <div className="absolute bottom-0 right-0 p-4 bg-white border-t w-full flex justify-end space-x-2">
                 <Button variant="outline" onClick={() => setIsOpen(false)}>
                   Cancel
                 </Button>
                 <Button
                   disabled={selectedFiles.size === 0 || isLoading}
-                  onClick={handleCreateKnowledgeBase}
+                  onClick={
+                    selectedKB ? handleSyncFiles : handleCreateKnowledgeBase
+                  }
                   className="rounded-lg shadow flex flex-row items-center gap-2 bg-violet-600 font-bold"
                 >
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Creating...
+                      {selectedKB ? "Syncing..." : "Creating..."}
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" fill="white" />
-                      Create Knowledge Base
+                      {selectedKB ? "Sync Files" : "Create Knowledge Base"}
                     </>
                   )}
                 </Button>

@@ -17,6 +17,10 @@ export interface ApiClient {
     knowledgeBaseId: string,
     resourcePath?: string
   ): Promise<FileNode[]>;
+  updateKnowledgeBase(
+    knowledgeBaseId: string,
+    fileIds: string[]
+  ): Promise<KnowledgeBase>;
 }
 
 export const createApiClient = (): ApiClient => {
@@ -187,6 +191,30 @@ export const createApiClient = (): ApiClient => {
     }
   };
 
+  const updateKnowledgeBase = async (
+    knowledgeBaseId: string,
+    resourceIds: string[]
+  ): Promise<KnowledgeBase> => {
+    try {
+      const response = await fetchWithAuth(
+        `/knowledge-base/${knowledgeBaseId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            connection_source_ids: resourceIds,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to update knowledge base: ${(error as Error).message}`
+      );
+    }
+  };
+
   const getKnowledgeBaseStatus = async (knowledgeBaseId: string) => {
     try {
       const response = await fetchWithAuth(
@@ -240,6 +268,7 @@ export const createApiClient = (): ApiClient => {
     syncKnowledgeBase,
     getKnowledgeBaseResources,
     listKnowledgeBases,
+    updateKnowledgeBase,
   };
 };
 

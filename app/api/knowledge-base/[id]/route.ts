@@ -97,20 +97,22 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params;
     const headersList = await headers();
     const authHeader = headersList.get("authorization");
+
+    if (!authHeader) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
 
-    const url = `${BASE_URL}/knowledge_bases/${id}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(`${BASE_URL}/knowledge_bases/${params.id}`, {
       method: "PATCH",
       headers: {
-        Authorization: authHeader || "",
+        Authorization: authHeader,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -128,13 +130,9 @@ export async function PATCH(
     }
 
     const data = await response.json();
-    return NextResponse.json({
-      success: true,
-      data,
-      message: "Knowledge base updated successfully",
-    });
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Error updating knowledge base:", error);
+    console.error("Error in knowledge base update:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
