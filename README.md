@@ -1,70 +1,134 @@
-## Notes and some thought process
-
-- here ill be taking some notes while i build this
-
-- first create basic nextjs app with app router
-- add basic folder structure for the api calls (api/knowledge-base, api/files, api/auth). this is the most important stuff
-- add all the shadcn ui components for the frontend
-- add global middleware to protect all api routes except for the auth endpoint
-- add a basic auth endpoint that uses stack ai to authenticate the user
-- add a dashboard page that has a sidebar and a header
-- add files route that fetches the files from the stack ai api
-- add knowledge base route that creates a knowledge base from the selected files and folders
-- start documenting on readme so that i dont forget later and becomes a nightmare to maintain
-- add types for the api responses
-- add a file picker component that uses the files route to fetch and display the files
-- add api client to handle all the api requests
-
----
-
 # Stack AI File Picker
 
-A custom File Picker implementation for Stack AI's Google Drive integration, built with Next.js 14+ App Router.
+A robust File Picker implementation for Stack AI's Google Drive integration, built with Next.js 14+ App Router. This component enables seamless file selection, knowledge base creation, and indexing management.
+
+## 📚 Table of Contents
+
+- [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [API Reference](#-api-reference)
+- [Component Reference](#-component-reference)
+- [Architecture](#-architecture)
+- [Development](#-development)
+- [Troubleshooting](#-troubleshooting)
 
 ## 🚀 Features
 
-- Google Drive file/folder browsing with nested navigation
-- File/folder selection for knowledge base creation
-- File indexing status tracking
-- File deletion and de-indexing capabilities
-- Sorting and filtering capabilities
+### Core Features
 
-## 📁 Project Structure
+- **Google Drive Integration**
+  - Seamless browsing with nested navigation
+  - Real-time file/folder status updates
+  - Multi-select capability
 
+### Knowledge Base Management
+
+- **Creation & Indexing**
+  - One-click knowledge base creation
+  - Automatic file indexing
+  - Progress tracking
+
+### User Experience
+
+- **Modern Interface**
+  - Responsive design
+  - Drag-and-drop support
+  - Loading states & error handling
+
+### Security
+
+- **Built-in Protection**
+  - API route protection
+  - Token-based authentication
+  - Secure data handling
+
+## 🏃 Quick Start
+
+```bash
+# Install dependencies
+npm install @stack-ai/file-picker
+
+# Add to your Next.js project
+import { FilePicker } from "@stack-ai/file-picker";
+
+# Basic usage
+export default function App() {
+  return <FilePicker onSelect={files => console.log(files)} />;
+}
 ```
-src/
-├── app/
-│   ├── api/
-│   │   ├── auth/
-│   │   │   └── route.ts         # Authentication endpoint
-│   │   ├── files/
-│   │   │   └── route.ts         # File operations endpoint
-│   │   └── knowledge-base/
-│   │       ├── sync/
-│   │       │   └── route.ts     # KB synchronization endpoint
-│   │       ├── [id]/
-│   │       │   └── route.ts     # KB specific operations
-│   │       └── route.ts         # KB creation endpoint
-│   ├── middleware.ts            # API route protection
-│   └── page.tsx                 # Main File Picker page
-├── components/
-│   └── file-picker/
-│       └── index.tsx            # File Picker component
-├── lib/
-│   ├── api.ts                   # API client implementation
-│   └── api-context.tsx          # React context for API client
-└── types/
-    └── api.ts                   # TypeScript interfaces
+
+## 🛠 Installation
+
+1. **Prerequisites**
+
+   ```bash
+   Node.js >= 18.0.0
+   Next.js >= 14.0.0
+   ```
+
+2. **Environment Setup**
+
+   ```env
+   NEXT_PUBLIC_API_URL=https://api.stack-ai.com
+   NEXT_PUBLIC_AUTH_URL=https://sb.stack-ai.com/auth/v1/token
+   ```
+
+3. **Required Dependencies**
+   ```bash
+   npx shadcn-ui@latest init
+   npx shadcn-ui@latest add button card dropdown-menu
+   ```
+
+## 💻 Usage
+
+### Basic Implementation
+
+```typescript
+import { FilePicker } from "@/components/file-picker";
+import { useApiClient } from "@/lib/api-context";
+
+export default function KnowledgeBasePage() {
+  const handleSelect = async (files: string[]) => {
+    const kb = await apiClient.createKnowledgeBase(files);
+    await apiClient.syncKnowledgeBase(kb.id, files);
+  };
+
+  return (
+    <FilePicker
+      onSelect={handleSelect}
+      maxSelection={10}
+      allowedTypes={["pdf", "doc", "txt"]}
+    />
+  );
+}
 ```
 
-## 🔌 API Routes Documentation
+### Advanced Configuration
+
+```typescript
+<FilePicker
+  initialPath="/documents"
+  selectionMode="multiple"
+  showStatus={true}
+  onError={(error) => console.error(error)}
+  customStyles={{
+    height: "600px",
+    width: "100%",
+  }}
+/>
+```
+
+## 📡 API Reference
 
 ### Authentication
 
-**Endpoint:** `POST /api/auth`
-
 ```typescript
-// Request body
+POST /api/auth
+Content-Type: application/json
+
+// Request
 {
   "email": string,
   "password": string
@@ -72,210 +136,148 @@ src/
 
 // Response
 {
-  "access_token": string
-  // Other auth data...
+  "access_token": string,
+  "expires_in": number
 }
 ```
-
-Purpose: Authenticates user with Stack AI service and returns access token.
 
 ### File Operations
 
-**Endpoint:** `GET /api/files`
-
 ```typescript
-// Query parameters
-{
-  connectionId: string;       // Required: Google Drive connection ID
-  resourceId?: string;       // Optional: Parent folder ID for navigation
-}
+GET /api/files?connectionId=string&resourceId=string
 
 // Response
 {
-  resource_id: string;
-  inode_type: "file" | "directory";
-  inode_path: {
-    path: string;
-  };
-  status?: "pending" | "indexed" | "failed";
-  // Other file metadata...
-}[]
+  "items": [
+    {
+      "resource_id": string,
+      "inode_type": "file" | "directory",
+      "inode_path": { "path": string },
+      "status": "pending" | "indexed" | "failed"
+    }
+  ]
+}
 ```
-
-Purpose: Lists files and folders from connected Google Drive, supports nested navigation.
 
 ### Knowledge Base Operations
 
-#### Create Knowledge Base
-
-**Endpoint:** `POST /api/knowledge-base`
-
 ```typescript
-// Request body
+POST /api/knowledge-bases
+Content-Type: application/json
+
+// Request
 {
   "connection_id": string,
-  "connection_source_ids": string[],  // File/folder IDs to index
+  "connection_source_ids": string[],
   "indexing_params": {
     "ocr": boolean,
     "unstructured": boolean,
-    "embedding_params": {
-      "embedding_model": string,
-      "api_key": string | null
-    },
-    "chunker_params": {
-      "chunk_size": number,
-      "chunk_overlap": number,
-      "chunker": string
-    }
+    "embedding_params": {...},
+    "chunker_params": {...}
   }
 }
-
-// Response
-{
-  "knowledge_base_id": string,
-  // Other KB details...
-}
 ```
 
-Purpose: Creates a new knowledge base from selected files/folders.
+## 🧩 Component Reference
 
-#### Sync Knowledge Base
-
-**Endpoint:** `POST /api/knowledge-base/sync`
+### FilePicker Props
 
 ```typescript
-// Query parameters
-{
-  knowledgeBaseId: string;    // Required: KB to sync
-  orgId: string;             // Required: Organization ID
-}
-
-// Response
-{
-  "success": boolean,
-  "message": string
+interface FilePickerProps {
+  onSelect?: (files: string[]) => void;
+  onError?: (error: Error) => void;
+  maxSelection?: number;
+  allowedTypes?: string[];
+  selectionMode?: "single" | "multiple";
+  showStatus?: boolean;
+  initialPath?: string;
+  customStyles?: React.CSSProperties;
 }
 ```
 
-Purpose: Triggers indexing process for a knowledge base.
-
-#### Delete from Knowledge Base
-
-**Endpoint:** `DELETE /api/knowledge-base/[id]`
+### ApiClient Methods
 
 ```typescript
-// Query parameters
-{
-  resourcePath: string;      // Required: Path of file to remove
-}
-
-// Response
-{
-  "success": boolean
+interface ApiClient {
+  login(email: string, password: string): Promise<void>;
+  listFiles(parentId?: string): Promise<FileNode[]>;
+  createKnowledgeBase(fileIds: string[]): Promise<KnowledgeBase>;
+  syncKnowledgeBase(kbId: string, resourceIds: string[]): Promise<SyncResponse>;
 }
 ```
 
-Purpose: Removes a file from knowledge base without deleting from Google Drive.
+## 🏗 Architecture
 
-## 🔒 Security
+### Project Structure
 
-The application implements several security measures:
-
-1. **API Route Protection:**
-
-   - Middleware checks for valid authentication token
-   - All API routes (except /auth) require valid token
-   - Sensitive data kept server-side
-
-2. **Error Handling:**
-   - Consistent error response format
-   - Proper HTTP status codes
-   - Detailed error messages for debugging
-   - Input validation
-
-## 💻 Key Components
-
-### `ApiClient` Class
-
-Located in `src/lib/api.ts`, handles all API communications:
-
-- Authentication management
-- File operations
-- Knowledge base operations
-- Error handling
-
-```typescript
-class ApiClient {
-  async login(email: string, password: string): Promise<void>;
-  async listFiles(parentId?: string): Promise<FileNode[]>;
-  async createKnowledgeBase(resourceIds: string[]): Promise<KnowledgeBase>;
-  async syncKnowledgeBase(knowledgeBaseId: string): Promise<void>;
-  // ... other methods
-}
+```
+src/
+├── app/                    # Next.js app directory
+│   ├── api/               # API routes
+│   └── page.tsx           # Main page
+├── components/            # React components
+├── lib/                   # Utilities & services
+└── types/                # TypeScript definitions
 ```
 
-### File Picker Component
+### Key Technologies
 
-Located in `src/components/file-picker/index.tsx`:
+- Next.js 14+ (App Router)
+- ShadcnUI Components
+- TypeScript
+- Stack AI API Integration
 
-- File/folder navigation
-- Selection management
-- File status display
-- Action menus for files
+## 🔧 Development
 
-## 🛠 Setup & Installation
-
-1. Clone the repository:
-
-```bash
-git clone [repository-url]
-```
-
-2. Install dependencies:
-
-```bash
-npm install
-```
-
-3. Install required shadcn components:
-
-```bash
-npx shadcn-ui@latest init
-npx shadcn-ui@latest add button card dropdown-menu
-```
-
-4. Add required environment variables:
-
-```env
-NEXT_PUBLIC_API_URL=https://api.stack-ai.com
-NEXT_PUBLIC_AUTH_URL=https://sb.stack-ai.com/auth/v1/token
-```
-
-5. Run development server:
+### Local Development
 
 ```bash
 npm run dev
+# Visit http://localhost:3000
 ```
 
-## 🧪 Usage Example
+### Building for Production
+
+```bash
+npm run build
+npm start
+```
+
+### Testing
+
+```bash
+npm run test        # Run tests
+npm run test:watch  # Watch mode
+```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+1. **Authentication Errors**
+
+   ```typescript
+   // Check token expiration
+   if (error.status === 401) {
+     await apiClient.login(email, password);
+   }
+   ```
+
+2. **File Selection Issues**
+
+   - Ensure file types are supported
+   - Check maxSelection limit
+   - Verify connection ID is valid
+
+3. **Indexing Problems**
+   - Monitor sync status
+   - Check file permissions
+   - Verify file content is accessible
+
+### Debug Mode
 
 ```typescript
-// Example of using the File Picker component
-import { FilePicker } from "@/components/file-picker";
-
-export default function HomePage() {
-  return (
-    <main className="container mx-auto p-4">
-      <FilePicker />
-    </main>
-  );
-}
+<FilePicker debug={true} />
 ```
 
-## 📝 Notes
-
-- The API client uses Next.js App Router's new features like server components and route handlers
-- All dates are in ISO 8601 format
-- File paths are Unix-style with forward slashes
-- Knowledge base sync is an asynchronous operation
-- File statuses can be: "pending", "indexed", or "failed"
+---
