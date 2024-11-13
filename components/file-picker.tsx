@@ -43,6 +43,7 @@ import {
   CheckCircle,
   Clock,
   XCircle,
+  Plus,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { ScrollArea } from "./ui/scroll-area";
@@ -212,6 +213,7 @@ export default function FilePickerDialog() {
     if (integrationId === "google-drive") {
       try {
         setIsLoading(true);
+        setSelectedIntegration(integrationId);
         await authenticate();
         const fileList = await api.listFiles();
         setFiles(fileList);
@@ -233,6 +235,7 @@ export default function FilePickerDialog() {
         }
       } catch (error) {
         console.error("Error in handleIntegrationSelect:", error);
+        setSelectedIntegration(null);
         setError("Failed to load content");
         toast({
           variant: "destructive",
@@ -554,22 +557,21 @@ export default function FilePickerDialog() {
 
                 {selectedKB && (
                   <>
-                    <div className="px-2 py-1 text-sm">
-                      <div className="font-medium text-muted-foreground">
-                        Current KB:
-                      </div>
+                    <div className="px-2 py-1 text-sm shadow border rounded-md">
+                      <Badge variant="secondary" className="text-xs">
+                        Current
+                      </Badge>
                       <div className="truncate text-primary">
                         {selectedKB.name}
                       </div>
                     </div>
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-muted-foreground hover:text-primary"
+                      variant="outline"
                       onClick={() => setSelectedKB(null)}
+                      className="w-full"
                     >
-                      <FileText className="w-4 h-4 mr-2" />
-                      Create New KB
+                      <Plus className="w-4 h-4 mr-2" />
+                      New Knowledge Base
                     </Button>
                   </>
                 )}
@@ -618,44 +620,65 @@ export default function FilePickerDialog() {
                   Choose files to include in your knowledge base
                 </DialogDescription>
               </DialogHeader>
-
-              {/* Selected Files Display */}
-              {selectedFiles.size > 0 && (
-                <div className="mb-4 mt-2">
-                  <h4 className="text-sm font-medium mb-2">Selected Files:</h4>
-                  <ScrollArea className="h-20 rounded-md border p-2">
-                    <div className="space-y-2">
-                      {getSelectedFileDetails().map((file) => (
-                        <div
-                          key={file.resource_id}
-                          className="flex items-center justify-between bg-muted/50 rounded-sm px-2 py-1"
-                        >
-                          <div className="flex items-center space-x-2">
-                            {file.inode_type === "directory" ? (
-                              <FolderIcon className="w-4 h-4 text-blue-500" />
-                            ) : (
-                              <FileIcon className="w-4 h-4 text-muted-foreground" />
-                            )}
-                            <span className="text-sm truncate max-w-[200px]">
-                              {file.inode_path.path.split("/").pop()}
-                            </span>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleFileSelect(file);
-                            }}
-                            className="text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+              {!selectedIntegration ? (
+                // Empty State
+                <div className="flex flex-col items-center justify-center text-center text-muted-foreground h-3/4">
+                  <div className="rounded-full bg-muted p-4">
+                    <FileText className="h-8 w-8" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-medium text-lg">
+                      No Integration Selected
+                    </h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">
+                      Select an integration from the sidebar to browse your
+                      files and create a knowledge base.
+                    </p>
+                  </div>
                 </div>
+              ) : (
+                // Existing Content
+                <>
+                  {/* Selected Files Display */}
+                  {selectedFiles.size > 0 && (
+                    <div className="mb-4 mt-2">
+                      <h4 className="text-sm font-medium mb-2">
+                        Selected Files:
+                      </h4>
+                      <ScrollArea className="h-20 rounded-md border p-2">
+                        <div className="space-y-2">
+                          {getSelectedFileDetails().map((file) => (
+                            <div
+                              key={file.resource_id}
+                              className="flex items-center justify-between bg-muted/50 rounded-sm px-2 py-1"
+                            >
+                              <div className="flex items-center space-x-2">
+                                {file.inode_type === "directory" ? (
+                                  <FolderIcon className="w-4 h-4 text-blue-500" />
+                                ) : (
+                                  <FileIcon className="w-4 h-4 text-muted-foreground" />
+                                )}
+                                <span className="text-sm truncate max-w-[200px]">
+                                  {file.inode_path.path.split("/").pop()}
+                                </span>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleFileSelect(file);
+                                }}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
+                </>
               )}
-
               {/* Search Input - show only when files are loaded and not loading */}
               {!isLoading && selectedIntegration && files.length > 0 && (
                 <div className="flex gap-4 mb-4">
@@ -851,7 +874,9 @@ export default function FilePickerDialog() {
                   onClick={
                     selectedKB ? handleSyncFiles : handleCreateKnowledgeBase
                   }
-                  className="rounded-lg shadow flex flex-row items-center gap-2 bg-violet-600 font-bold"
+                  className={`rounded-lg shadow flex flex-row items-center gap-2 font-bold ${
+                    selectedKB ? "bg-black" : "bg-violet-600"
+                  }`}
                 >
                   {isLoading ? (
                     <>
