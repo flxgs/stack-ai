@@ -34,6 +34,7 @@ import confluence from "@/public/confluence.svg";
 import dropbox from "@/public/dropbox.svg";
 import github from "@/public/github.svg";
 import slack from "@/public/slack.svg";
+import { Skeleton } from "./ui/skeleton";
 
 // Integration type for sidebar
 type Integration = {
@@ -402,8 +403,22 @@ export default function FilePickerDialog() {
 
             {/* Loading State */}
             {isLoading && (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="w-8 h-8 animate-spin" />
+              <div className="space-y-3">
+                {/* File Header Skeleton */}
+                <div className="flex items-center space-x-2 mb-6">
+                  <Skeleton className="h-4 w-[100px]" />
+                  <Skeleton className="h-4 w-4" />
+                  <Skeleton className="h-4 w-[100px]" />
+                </div>
+
+                {/* File Row Skeletons */}
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="flex items-center space-x-4 p-2">
+                    <Skeleton className="h-5 w-5" /> {/* Icon */}
+                    <Skeleton className="h-4 flex-grow" /> {/* Filename */}
+                    <Skeleton className="h-4 w-4" /> {/* Checkbox */}
+                  </div>
+                ))}
               </div>
             )}
 
@@ -458,7 +473,7 @@ export default function FilePickerDialog() {
                 )}
 
                 {/* Files and Folders - now using filteredFiles */}
-                <div className="space-y-2">
+                <div className="space-y-2 text-sm">
                   {filteredFiles.map((file) => (
                     <div
                       key={file.resource_id}
