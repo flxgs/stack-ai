@@ -25,6 +25,7 @@ import {
   FileText,
   X,
   Search,
+  Sparkles,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { ScrollArea } from "./ui/scroll-area";
@@ -403,7 +404,7 @@ export default function FilePickerDialog() {
 
             {/* Loading State */}
             {isLoading && (
-              <div className="space-y-3">
+              <div className="space-y-3 mb-16">
                 {/* File Header Skeleton */}
                 <div className="flex items-center space-x-2 mb-6">
                   <Skeleton className="h-4 w-[100px]" />
@@ -516,13 +517,14 @@ export default function FilePickerDialog() {
             )}
 
             {/* Action Buttons */}
-            <div className="absolute bottom-0 right-0 p-4 bg-white border-t w-full flex justify-end space-x-2">
+            <div className="absolute bottom-0 right-0 p-4 bg-white border-t w-full flex justify-end space-x-2 ">
               <Button variant="outline" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>
               <Button
                 disabled={selectedFiles.size === 0 || isLoading}
                 onClick={handleCreateKnowledgeBase}
+                className="rounded-lg shadow flex flex-row items-center gap-2 bg-violet-600 font-bold"
               >
                 {isLoading ? (
                   <>
@@ -530,7 +532,10 @@ export default function FilePickerDialog() {
                     Creating...
                   </>
                 ) : (
-                  "Create Knowledge Base"
+                  <>
+                    <Sparkles className="w-4 h-4" fill="white" />
+                    Create Knowledge Base
+                  </>
                 )}
               </Button>
             </div>
