@@ -232,13 +232,37 @@ export default function FilePickerDialog() {
     }
   };
 
-  // Handle file selection
+  // Add a warning when selecting a folder that contains already selected files
   const handleFileSelect = (file: FileNode) => {
     setSelectedFiles((prev) => {
       const next = new Set(prev);
+
       if (next.has(file.resource_id)) {
+        // Removing selection
         next.delete(file.resource_id);
       } else {
+        // Adding selection
+        if (file.inode_type === "directory") {
+          // Check if any selected files are children of this folder
+          const hasSelectedChildren = Array.from(prev).some((selectedId) => {
+            const selectedFile = files.find(
+              (f) => f.resource_id === selectedId
+            );
+            return (
+              selectedFile &&
+              selectedFile.inode_path.path.startsWith(file.inode_path.path)
+            );
+          });
+
+          if (hasSelectedChildren) {
+            toast({
+              title: "Warning",
+              description:
+                "You have already selected files from this folder. Selecting the folder will include all its contents.",
+              className: "bg-yellow-500 text-white",
+            });
+          }
+        }
         next.add(file.resource_id);
       }
       return next;
@@ -285,21 +309,29 @@ export default function FilePickerDialog() {
       setIsLoading(true);
       setError(null);
 
+      // Create knowledge base
       const kb = await api.createKnowledgeBase(Array.from(selectedFiles));
-      await api.syncKnowledgeBase(kb.knowledge_base_id);
+      console.log("Knowledge base created:", kb);
 
-      toast({
-        title: "Success",
-        description: "Knowledge base created successfully.",
-      });
-      setIsOpen(false);
+      // Sync knowledge base
+      const syncResult = await api.syncKnowledgeBase(kb.knowledge_base_id);
+      console.log("Sync result:", syncResult);
+
+      if (syncResult.success) {
+        toast({
+          title: "Success",
+          description: "Knowledge base created and sync started successfully.",
+        });
+        setIsOpen(false);
+      } else {
+        throw new Error(`Sync failed: ${syncResult.message}`);
+      }
     } catch (err) {
-      console.error("Error creating knowledge base:", err);
-      setError("Failed to create knowledge base. Please try again.");
+      console.error("Error:", err);
       toast({
         variant: "destructive",
-        title: "Creation Failed",
-        description: "Could not create knowledge base. Please try again.",
+        title: "Error",
+        description: err instanceof Error ? err.message : "An error occurred",
       });
     } finally {
       setIsLoading(false);
@@ -365,7 +397,7 @@ export default function FilePickerDialog() {
                 {selectedFiles.size > 0 && (
                   <Badge
                     variant="secondary"
-                    className="mr-16 text-lg bg-blue-600 text-white"
+                    className="mr-16 text-md bg-blue-600 text-white"
                   >
                     {selectedFiles.size} file
                     {selectedFiles.size !== 1 ? "s" : ""} selected
@@ -389,7 +421,11 @@ export default function FilePickerDialog() {
                         className="flex items-center justify-between bg-muted/50 rounded-sm px-2 py-1"
                       >
                         <div className="flex items-center space-x-2">
-                          <FileIcon className="w-4 h-4 text-muted-foreground" />
+                          {file.inode_type === "directory" ? (
+                            <FolderIcon className="w-4 h-4 text-blue-500" />
+                          ) : (
+                            <FileIcon className="w-4 h-4 text-muted-foreground" />
+                          )}
                           <span className="text-sm truncate max-w-[200px]">
                             {file.inode_path.path.split("/").pop()}
                           </span>
@@ -458,7 +494,7 @@ export default function FilePickerDialog() {
 
             {/* Loading State */}
             {isLoading && (
-              <div className="space-y-3 mb-16">
+              <div className="space-y-3 mb-24">
                 {/* File Header Skeleton */}
                 <div className="flex items-center space-x-2 mb-6">
                   <Skeleton className="h-4 w-[100px]" />
@@ -532,28 +568,35 @@ export default function FilePickerDialog() {
                   {filteredFiles.map((file) => (
                     <div
                       key={file.resource_id}
-                      onClick={() =>
-                        file.inode_type === "directory"
-                          ? handleFolderClick(file)
-                          : handleFileSelect(file)
-                      }
                       className={`flex items-center p-2 rounded hover:bg-gray-100 cursor-pointer ${
                         selectedFiles.has(file.resource_id) ? "bg-blue-50" : ""
                       }`}
                     >
-                      {file.inode_type === "directory" ? (
-                        <FolderIcon className="w-5 h-5 text-blue-500 mr-2" />
-                      ) : (
-                        <FileIcon className="w-5 h-5 text-gray-500 mr-2" />
-                      )}
-                      {/* Highlight matching text */}
-                      <span className="flex-1">
-                        {highlightMatch(
-                          file.inode_path.path.split("/").pop() || "",
-                          searchQuery
+                      {/* Left side: Icon and Name - clickable for navigation */}
+                      <div
+                        className="flex items-center flex-1"
+                        onClick={() =>
+                          file.inode_type === "directory"
+                            ? handleFolderClick(file)
+                            : undefined
+                        }
+                      >
+                        {file.inode_type === "directory" ? (
+                          <FolderIcon className="w-5 h-5 text-blue-500 mr-2" />
+                        ) : (
+                          <FileIcon className="w-5 h-5 text-gray-500 mr-2" />
                         )}
-                      </span>
-                      {file.inode_type === "file" && (
+                        <span className="flex-1">
+                          {highlightMatch(
+                            file.inode_path.path.split("/").pop() || "",
+                            searchQuery
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Right side: Actions */}
+                      <div className="flex items-center gap-2">
+                        {/* Show checkbox for both files and folders */}
                         <input
                           type="checkbox"
                           checked={selectedFiles.has(file.resource_id)}
@@ -563,7 +606,21 @@ export default function FilePickerDialog() {
                           }}
                           className="ml-2"
                         />
-                      )}
+                        {/* Optional: Add folder navigation button */}
+                        {file.inode_type === "directory" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="p-1 h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFolderClick(file);
+                            }}
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

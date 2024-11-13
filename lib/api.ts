@@ -1,10 +1,12 @@
-import { FileNode, KnowledgeBase } from "@/types/api";
+// src/lib/api-client.ts
+import { FileNode, KnowledgeBase, SyncResponse } from "@/types/api";
 
 interface ApiClient {
   login(email: string, password: string): Promise<void>;
   listFiles(parentId?: string): Promise<FileNode[]>;
   createKnowledgeBase(resourceIds: string[]): Promise<KnowledgeBase>;
-  syncKnowledgeBase(knowledgeBaseId: string): Promise<void>;
+  syncKnowledgeBase(knowledgeBaseId: string): Promise<SyncResponse>;
+  getKnowledgeBaseStatus(knowledgeBaseId: string): Promise<any>;
 }
 
 export const createApiClient = (): ApiClient => {
@@ -27,7 +29,16 @@ export const createApiClient = (): ApiClient => {
       },
     });
 
-    if (!response.ok) throw new Error("API request failed");
+    if (!response.ok) {
+      let errorMessage = `Request failed with status ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch {
+        // If error response is not JSON, use default message
+      }
+      throw new Error(errorMessage);
+    }
 
     return response;
   };
@@ -85,36 +96,98 @@ export const createApiClient = (): ApiClient => {
   ): Promise<KnowledgeBase> => {
     if (!connectionId) throw new Error("No connection ID available");
 
-    const response = await fetchWithAuth("/knowledge-base", {
-      method: "POST",
-      body: JSON.stringify({
-        connection_id: connectionId,
-        connection_source_ids: resourceIds,
-        indexing_params: {
-          ocr: false,
-          unstructured: true,
-          embedding_params: {
-            embedding_model: "text-embedding-ada-002",
-            api_key: null,
+    try {
+      const response = await fetchWithAuth("/knowledge-base", {
+        method: "POST",
+        body: JSON.stringify({
+          connection_id: connectionId,
+          connection_source_ids: resourceIds,
+          indexing_params: {
+            ocr: false,
+            unstructured: true,
+            embedding_params: {
+              embedding_model: "text-embedding-ada-002",
+              api_key: null,
+            },
+            chunker_params: {
+              chunk_size: 1500,
+              chunk_overlap: 500,
+              chunker: "sentence",
+            },
           },
-          chunker_params: {
-            chunk_size: 1500,
-            chunk_overlap: 500,
-            chunker: "sentence",
-          },
-        },
-      }),
-    });
-    return response.json();
+          org_level_role: null,
+          cron_job_id: null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.knowledge_base_id) {
+        throw new Error("Knowledge base creation failed: No ID returned");
+      }
+
+      return data;
+    } catch (error) {
+      throw new Error(
+        `Failed to create knowledge base: ${(error as Error).message}`
+      );
+    }
   };
 
-  const syncKnowledgeBase = async (knowledgeBaseId: string): Promise<void> => {
+  const syncKnowledgeBase = async (
+    knowledgeBaseId: string
+  ): Promise<SyncResponse> => {
     if (!orgId) throw new Error("No organization ID available");
 
-    await fetchWithAuth(
-      `/knowledge-base/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${orgId}`,
-      { method: "POST" }
-    );
+    try {
+      const response = await fetchWithAuth(
+        `/knowledge-base/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${orgId}`,
+        {
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      let message = "";
+      try {
+        const text = await response.text();
+        message = text;
+        // Try to parse as JSON if possible
+        try {
+          const json = JSON.parse(text);
+          message = json.message || json.error || text;
+        } catch {
+          // If not JSON, use text as is
+        }
+      } catch (e) {
+        message = "No response content";
+      }
+
+      return {
+        status: response.status,
+        message,
+        success: response.status >= 200 && response.status < 300,
+      };
+    } catch (error) {
+      console.error("Sync error:", error);
+      throw new Error(
+        `Failed to sync knowledge base: ${(error as Error).message}`
+      );
+    }
+  };
+
+  const getKnowledgeBaseStatus = async (knowledgeBaseId: string) => {
+    try {
+      const response = await fetchWithAuth(
+        `/knowledge-base/${knowledgeBaseId}`
+      );
+      return response.json();
+    } catch (error) {
+      throw new Error(
+        `Failed to get knowledge base status: ${(error as Error).message}`
+      );
+    }
   };
 
   return {
@@ -122,6 +195,7 @@ export const createApiClient = (): ApiClient => {
     listFiles,
     createKnowledgeBase,
     syncKnowledgeBase,
+    getKnowledgeBaseStatus,
   };
 };
 

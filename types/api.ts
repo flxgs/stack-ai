@@ -21,4 +21,10 @@ export interface ApiError {
   status: number;
 }
 
+export interface SyncResponse {
+  status: number;
+  message?: string;
+  success?: boolean;
+}
+
 export type SortOption = "name_asc" | "name_desc" | "date_asc" | "date_desc";
