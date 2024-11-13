@@ -1,6 +1,6 @@
 # Stack AI File Picker
 
-A robust File Picker implementation for Stack AI's Google Drive integration, built with Next.js 14+ App Router. This component enables seamless file selection, knowledge base creation, and indexing management.
+A robust👀 File Picker implementation for Stack AI's Google Drive integration, built with Next.js 14+ App Router. This component enables seamless file selection, knowledge base creation, and indexing management.
 
 ## 🔧 Development
 
@@ -36,8 +36,7 @@ npm start
 
 3. **Required Dependencies**
    ```bash
-   npx shadcn-ui@latest init
-   npx shadcn-ui@latest add button card dropdown-menu
+   npm i
    ```
 
 ## 💻 Usage
