@@ -1,3 +1,6 @@
+// src/components/knowledge-bases.tsx
+"use client";
+
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api";
 import { KnowledgeBaseList } from "@/types/api";
@@ -25,17 +28,44 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  FileText,
+  Plus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import FilePickerDialog from "./file-picker";
 
-export default function KnowledgeBasesList() {
+export default function KnowledgeBases() {
   const { toast } = useToast();
   const [kbs, setKbs] = useState<KnowledgeBaseList[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const authenticate = async () => {
+    try {
+      setIsLoading(true);
+      await apiClient.login("stackaitest@gmail.com", "!z4ZnxkyLYs#vR");
+      setIsAuthenticated(true);
+      return true;
+    } catch (err) {
+      console.error("Authentication error:", err);
+      toast({
+        variant: "destructive",
+        title: "Authentication Failed",
+        description: "Please try again later.",
+      });
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const loadKnowledgeBases = async () => {
     try {
       setIsLoading(true);
+      if (!isAuthenticated) {
+        const success = await authenticate();
+        if (!success) return;
+      }
       const list = await apiClient.listKnowledgeBases();
       setKbs(list);
     } catch (error) {
@@ -50,9 +80,41 @@ export default function KnowledgeBasesList() {
     }
   };
 
+  // Load KBs on mount if authenticated
   useEffect(() => {
-    loadKnowledgeBases();
-  }, []);
+    if (isAuthenticated) {
+      loadKnowledgeBases();
+    }
+  }, [isAuthenticated]);
+
+  if (!isAuthenticated) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Knowledge Bases</CardTitle>
+          <CardDescription>
+            Connect to view your knowledge bases
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center py-8">
+          <Database className="h-12 w-12 mb-4 text-muted-foreground" />
+          <p className="text-muted-foreground mb-4">
+            Connect to Google Drive to view and manage your knowledge bases
+          </p>
+          <Button onClick={authenticate} disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              "Connect to Google Drive"
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -62,18 +124,21 @@ export default function KnowledgeBasesList() {
             <CardTitle>Knowledge Bases</CardTitle>
             <CardDescription>Your indexed documents and files</CardDescription>
           </div>
-          <Button
-            onClick={loadKnowledgeBases}
-            variant="outline"
-            size="sm"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              "Refresh"
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={loadKnowledgeBases}
+              variant="outline"
+              size="sm"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Refresh"
+              )}
+            </Button>
+            <FilePickerDialog />
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -83,8 +148,11 @@ export default function KnowledgeBasesList() {
           </div>
         ) : kbs.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No knowledge bases found</p>
+            <p className="text-sm mt-2">
+              Create one by clicking &apos;Select Files&apos;
+            </p>
           </div>
         ) : (
           <Table>
@@ -92,6 +160,7 @@ export default function KnowledgeBasesList() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Files</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Updated</TableHead>
               </TableRow>
@@ -108,6 +177,7 @@ export default function KnowledgeBasesList() {
                       {kb.status || "Unknown"}
                     </Badge>
                   </TableCell>
+                  <TableCell>{kb.connection_source_ids.length} files</TableCell>
                   <TableCell>
                     {new Date(kb.created_at).toLocaleDateString()}
                   </TableCell>

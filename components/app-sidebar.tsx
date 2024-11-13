@@ -181,7 +181,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <SidebarMenu className="gap-2">
             <FilePickerDialog />
-            <KnowledgeBasesList />
 
             {data.navMain.map((item) => (
               <SidebarMenuItem key={item.title}>

@@ -4,18 +4,6 @@ import { headers } from "next/headers";
 const BASE_URL = "https://api.stack-ai.com";
 
 /**
- * Interface for Knowledge Base resource operations
- */
-interface KnowledgeBaseResource {
-  resource_id: string;
-  inode_type: "file" | "directory";
-  inode_path: {
-    path: string;
-  };
-  status?: "pending" | "indexed" | "failed";
-}
-
-/**
  * GET handler to list all knowledge bases
  */
 export async function GET(request: NextRequest) {

@@ -43,6 +43,7 @@ import dropbox from "@/public/dropbox.svg";
 import github from "@/public/github.svg";
 import slack from "@/public/slack.svg";
 import { Skeleton } from "./ui/skeleton";
+import KnowledgeBasesList from "./knowledge-bases-list";
 
 // Integration type for sidebar
 type Integration = {
@@ -387,6 +388,7 @@ export default function FilePickerDialog() {
                 )}
               </button>
             ))}
+            <KnowledgeBasesList />
           </div>
 
           {/* Main Content */}
