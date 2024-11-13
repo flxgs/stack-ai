@@ -1,43 +1,14 @@
-import { FileNode, KnowledgeBase, ApiError } from "@/types/api";
+import { FileNode, KnowledgeBase } from "@/types/api";
 
-/**
- * API Client for Stack AI
- * Handles authentication, file operations, and knowledge base management
- */
 export class ApiClient {
   private accessToken: string | null = null;
   private connectionId: string | null = null;
   private orgId: string | null = null;
 
-  private async fetchOrgId(): Promise<void> {
-    try {
-      const response = await this.fetch("/organizations/me/current");
-      const data = await response.json();
-      this.orgId = data.org_id;
-    } catch (error) {
-      throw new Error(
-        "Failed to fetch organization ID: " + (error as Error).message
-      );
-    }
-  }
-
-  private async fetchConnectionId(): Promise<void> {
-    try {
-      const response = await this.fetch(
-        "/connections?connection_provider=gdrive&limit=1"
-      );
-      const connections = await response.json();
-
-      if (!connections || connections.length === 0) {
-        throw new Error("No Google Drive connection found");
-      }
-
-      this.connectionId = connections[0].connection_id;
-    } catch (error) {
-      throw new Error(
-        "Failed to fetch connection ID: " + (error as Error).message
-      );
-    }
+  constructor() {
+    this.accessToken = null;
+    this.connectionId = null;
+    this.orgId = null;
   }
 
   async login(email: string, password: string): Promise<void> {
@@ -57,37 +28,32 @@ export class ApiClient {
       const data = await response.json();
       this.accessToken = data.access_token;
 
-      // Set up required IDs for API operations
+      // After getting the token, fetch org and connection IDs
       await this.fetchOrgId();
       await this.fetchConnectionId();
     } catch (error) {
       console.error("Login error:", error);
-      throw new Error("Login failed: " + (error as Error).message);
+      throw error;
     }
   }
 
-  private async fetch(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<Response> {
-    if (!this.accessToken) {
-      throw new Error("Not authenticated");
+  private async fetchOrgId(): Promise<void> {
+    const response = await this.fetch("/organizations/me/current");
+    const data = await response.json();
+    this.orgId = data.org_id;
+  }
+
+  private async fetchConnectionId(): Promise<void> {
+    const response = await this.fetch(
+      "/connections?connection_provider=gdrive&limit=1"
+    );
+    const connections = await response.json();
+
+    if (!connections || connections.length === 0) {
+      throw new Error("No Google Drive connection found");
     }
 
-    const response = await fetch(`/api${endpoint}`, {
-      ...options,
-      headers: {
-        ...options.headers,
-        Authorization: `Bearer ${this.accessToken}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error("API request failed");
-    }
-
-    return response;
+    this.connectionId = connections[0].connection_id;
   }
 
   async listFiles(parentId?: string): Promise<FileNode[]> {
@@ -137,27 +103,40 @@ export class ApiClient {
       throw new Error("No organization ID available");
     }
 
-    const queryParams = new URLSearchParams({
-      knowledgeBaseId,
-      orgId: this.orgId,
-    });
-
-    await this.fetch(`/knowledge-base/sync?${queryParams}`, {
-      method: "POST",
-    });
-  }
-
-  async deleteFromKnowledgeBase(
-    knowledgeBaseId: string,
-    resourcePath: string
-  ): Promise<void> {
     await this.fetch(
-      `/knowledge-base/${knowledgeBaseId}?resourcePath=${encodeURIComponent(
-        resourcePath
-      )}`,
-      {
-        method: "DELETE",
-      }
+      `/knowledge-base/sync?knowledgeBaseId=${knowledgeBaseId}&orgId=${this.orgId}`,
+      { method: "POST" }
     );
   }
+
+  private async fetch(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<Response> {
+    if (!this.accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`/api${endpoint}`, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${this.accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("API request failed");
+    }
+
+    return response;
+  }
+
+  // Getters
+  getAccessToken = () => this.accessToken;
+  getConnectionId = () => this.connectionId;
+  getOrgId = () => this.orgId;
 }
+
+export const apiClient = new ApiClient();
